@@ -26,6 +26,11 @@ what each verifier concluded, and where they disagreed.
 | App | <https://proofrelay.nectiq.xyz> |
 | API | <https://api-proofrelay.nectiq.xyz/health> |
 
+The source is verified on Sourcify with a full match on both the creation and
+the runtime bytecode — [repo.sourcify.dev/16661/0xD3101C19175b50fD47C9e0B14A2dc63485f527D1](https://repo.sourcify.dev/16661/0xD3101C19175b50fD47C9e0B14A2dc63485f527D1/).
+See [`docs/verification/`](docs/verification/) for the exact compiler settings
+and constructor arguments.
+
 `npm run verify-abi` proves the TypeScript client, the Solidity source and the
 deployed bytecode all agree. The check that settles it is byte equality: the live
 runtime is the same 19,775 bytes this source compiles to, so the deployment runs
