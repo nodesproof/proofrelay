@@ -522,3 +522,23 @@ button.signal-row:disabled { opacity: .72; }
   .task-hero-side { width: 100%; align-items: flex-start; padding-left: 0; padding-top: 12px; border-left: 0; border-top: 1px solid rgba(244,241,232,.14); }
   .task-hero-hash button { justify-self: start; }
 }
+
+/* The task record's rail pins while the timeline scrolls. Moving the timeline
+   into the left column removed the empty band above it, but a task with ten
+   events runs 700px past the rail's last card, and a column that has stopped
+   beside a column that keeps going reads as broken. Pinned, the record panel is
+   on screen the whole way down; when it is taller than the viewport it scrolls
+   inside itself rather than pinning only its top half. Grid cells stretch by
+   default, and a stretched cell leaves sticky nothing to move within — the grid
+   already sets align-items: start, which this depends on. */
+@media (min-width: 901px) {
+  .lower-grid > .right-column { position: sticky; top: 87px; max-height: calc(100vh - 103px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding: 2px 6px 10px 2px; margin: -2px -6px 0 -2px; }
+}
+/* Ten events at 137px each is most of a screen of whitespace. Tighter rhythm,
+   scoped to the task record so the activity log keeps its own. */
+.timeline-compact .timeline-content { padding-bottom: 13px; }
+.timeline-compact .timeline-content h3 { margin-top: 6px; }
+.timeline-compact .timeline-content p { margin-top: 4px; }
+.timeline-compact .timeline-meta { margin-top: 7px; }
+.timeline-compact .timeline-day { padding-top: 12px; }
+.timeline-compact .timeline-line::before { bottom: -9px; }
