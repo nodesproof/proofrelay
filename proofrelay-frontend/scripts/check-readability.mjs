@@ -48,6 +48,10 @@ const MEASURED_INK = new Set([
   ".task-banner-hash strong", ".network-row strong.value-warn",
   ".docs-bottom-cta", ".docs-bottom-cta span", ".timeline-ink", ".origin-chain",
   ".task-banner .origin-chip",
+  // The task record's hero is the banner's successor: same ink ground, same
+  // light-on-dark text, one block where there used to be three.
+  ".task-hero", ".task-hero .origin-chip", ".task-hero .quiet-button",
+  ".task-hero .quiet-button:hover:not(:disabled)", ".task-hero .quiet-button:disabled",
 ]);
 
 /**
@@ -57,7 +61,7 @@ const MEASURED_INK = new Set([
  */
 const INK_CONTAINER_PREFIXES = [
   ".code-block", ".code-head", ".topbar-pop", ".hero-visual", ".workspace-avatar",
-  ".task-banner-", ".visual-", ".workflow-copy", ".workflow-steps", ".docs-bottom-cta",
+  ".task-banner-", ".task-hero-", ".visual-", ".workflow-copy", ".workflow-steps", ".docs-bottom-cta",
 ];
 
 function partIsInk(part) {

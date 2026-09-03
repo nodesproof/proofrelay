@@ -481,3 +481,44 @@ button.signal-row:disabled { opacity: .72; }
 .modal-foot .primary-button { flex: 0 0 auto; white-space: nowrap; }
 
 @media (max-height: 780px) { .modal-backdrop { padding: 14px; }.modal-card { max-height: calc(100vh - 28px); max-height: calc(100dvh - 28px); padding-top: 20px; padding-bottom: 20px; }.modal-head h2 { font-size: 25px; margin-top: 5px; }.modal-copy { margin-top: 10px; font-size: 13px; line-height: 1.55; }.form-grid { gap: 12px; margin-top: 17px; }.modal-foot { margin-top: 17px; padding-top: 13px; } }
+
+/* Task detail, tidied. One hero where there were three headers; rail values
+   that take a second line instead of wrapping into rag; a span quoted once with
+   every verifier that cited it on the citation; a report table whose model
+   column was sized for the model names it actually shows; and the timeline in
+   the left column, so the rail sits beside all of it and leaves no gap. */
+.task-hero { display: flex; align-items: flex-start; gap: 16px; padding: 22px 24px 24px; background: #0d1721; color: #eff5e9; border-radius: 10px; }
+.task-hero-icon { flex: none; width: 36px; height: 36px; display: grid; place-items: center; color: #0d1721; background: #c7f36b; border-radius: 8px; margin-top: 3px; }
+.task-hero-main { min-width: 0; flex: 1; }
+.task-hero-top { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; min-height: 26px; }
+.task-hero .origin-chip { color: #c7f36b; background: rgba(199,243,107,.14); }
+.task-hero .quiet-button { color: #cfdcc6; }
+.task-hero .quiet-button:hover:not(:disabled) { color: #ffffff; }
+.task-hero .quiet-button:disabled { color: #8a988f; }
+.task-hero-title { font-family: "Space Grotesk", sans-serif; font-size: 25px; font-weight: 620; letter-spacing: -.05em; line-height: 1.12; margin-top: 13px; color: #f4f7ef; }
+.task-hero-question { color: #a5b3ab; font-size: 14px; line-height: 1.5; margin-top: 7px; max-width: 720px; }
+.task-hero-side { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; padding-left: 22px; border-left: 1px solid rgba(244,241,232,.14); }
+.task-hero-hash { display: grid; grid-template-columns: auto auto; column-gap: 16px; row-gap: 7px; align-items: center; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.task-hero-hash span { color: #7a8e85; font-size: 11px; }
+.task-hero-hash button { display: inline-flex; align-items: center; gap: 7px; justify-self: end; padding: 0; color: #c7f36b; background: transparent; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.task-hero-hash button:hover { text-decoration: underline; }
+.task-hero-hash button svg { opacity: .6; }
+.operator-metrics strong { max-width: 210px; line-height: 1.4; }
+.operator-metrics strong small { display: block; margin-top: 2px; color: #5f6761; font-family: "DM Sans", sans-serif; font-size: 11px; font-weight: 500; letter-spacing: 0; }
+.verdict-strip { display: flex; flex-direction: column; gap: 7px; margin-top: 12px; padding-bottom: 10px; border-bottom: 1px solid #e0e1d6; }
+.verdict-line { display: flex; align-items: center; gap: 9px; }
+.verdict-reasoning { color: #56655d; font-size: 13px; line-height: 1.6; margin-top: 10px; max-width: 640px; }
+.verdict-reasoning strong { color: #1c2b2c; font-weight: 700; }
+.verdict-reasoning + .verdict-reasoning { margin-top: 6px; }
+.evidence-detail .verdict-source { margin-top: 12px; }
+.evidence-detail .verdict-source + .verdict-source { margin-top: 14px; }
+.signal-table.report-table .signal-head, .signal-table.report-table .signal-row { grid-template-columns: 1.3fr .8fr 1.3fr .7fr 20px; }
+.signal-table.report-table .signal-row > div:first-child strong { white-space: nowrap; }
+.model-cell { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.model-cell strong { color: #29352f; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.model-cell small { color: #5f6761; font-size: 11px; }
+@media (max-width: 680px) {
+  .task-hero { flex-direction: column; gap: 12px; }
+  .task-hero-side { width: 100%; align-items: flex-start; padding-left: 0; padding-top: 12px; border-left: 0; border-top: 1px solid rgba(244,241,232,.14); }
+  .task-hero-hash button { justify-self: start; }
+}
