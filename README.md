@@ -26,8 +26,9 @@ what each verifier concluded, and where they disagreed.
 | App | <https://proofrelay.nectiq.xyz> |
 | API | <https://api-proofrelay.nectiq.xyz/health> |
 
-The source is verified on Sourcify with a full match on both the creation and
-the runtime bytecode — [repo.sourcify.dev/16661/0xD3101C19175b50fD47C9e0B14A2dc63485f527D1](https://repo.sourcify.dev/16661/0xD3101C19175b50fD47C9e0B14A2dc63485f527D1/).
+The source is verified on [0G ChainScan](https://chainscan.0g.ai/address/0xD3101C19175b50fD47C9e0B14A2dc63485f527D1)
+and on [Sourcify](https://repo.sourcify.dev/16661/0xD3101C19175b50fD47C9e0B14A2dc63485f527D1/), the latter a full match
+on both the creation and the runtime bytecode.
 See [`docs/verification/`](docs/verification/) for the exact compiler settings
 and constructor arguments.
 
