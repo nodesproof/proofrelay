@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 840" width="840" height="840" preserveAspectRatio="xMidYMid slice">
+  <title>Paper grain</title>
+  <!-- Tileable at the 840px background-size the app shell asks for. Both noise
+       fields use stitchTiles so the repeat has no visible seam. Paper Fog #F4F1E8
+       ground, Ledger Ink #0D1721 grain, kept under 6% so it reads as tooth on
+       paper rather than as texture. -->
+  <defs>
+    <filter id="grain" x="0" y="0" width="840" height="840" filterUnits="userSpaceOnUse" primitiveUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.86" numOctaves="4" seed="17" stitchTiles="stitch" result="tooth"/>
+      <feColorMatrix in="tooth" type="matrix" values="0 0 0 0 0.051  0 0 0 0 0.090  0 0 0 0 0.129  0.9 0.4 0.1 0 -0.34"/>
+    </filter>
+    <filter id="mottle" x="0" y="0" width="840" height="840" filterUnits="userSpaceOnUse" primitiveUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="3" seed="5" stitchTiles="stitch" result="pulp"/>
+      <feColorMatrix in="pulp" type="matrix" values="0 0 0 0 0.051  0 0 0 0 0.090  0 0 0 0 0.129  0.9 0.4 0.1 0 -0.42"/>
+    </filter>
+  </defs>
+  <rect width="840" height="840" fill="#F4F1E8"/>
+  <rect width="840" height="840" filter="url(#mottle)" opacity="0.055"/>
+  <rect width="840" height="840" filter="url(#grain)" opacity="0.075"/>
+</svg>

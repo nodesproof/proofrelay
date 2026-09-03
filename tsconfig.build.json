@@ -1,0 +1,32 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "packages/schemas"
+    },
+    {
+      "path": "packages/chain-client"
+    },
+    {
+      "path": "packages/config"
+    },
+    {
+      "path": "packages/storage-adapter"
+    },
+    {
+      "path": "packages/compute-adapter"
+    },
+    {
+      "path": "packages/consensus"
+    },
+    {
+      "path": "apps/api"
+    },
+    {
+      "path": "workers/verifier"
+    },
+    {
+      "path": "workers/adjudicator"
+    }
+  ]
+}

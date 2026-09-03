@@ -1,0 +1,20 @@
+[profile.default]
+src = "src"
+test = "test"
+script = "script"
+out = "out"
+libs = []
+remappings = []
+solc = "0.8.24"
+evm_version = "shanghai"
+optimizer = true
+optimizer_runs = 200
+bytecode_hash = "none"
+
+[fuzz]
+runs = 256
+
+[invariant]
+runs = 32
+depth = 160
+fail_on_revert = false

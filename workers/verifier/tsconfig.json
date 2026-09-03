@@ -1,0 +1,33 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "src/**/*.test.ts"
+  ],
+  "references": [
+    {
+      "path": "../../packages/schemas"
+    },
+    {
+      "path": "../../packages/chain-client"
+    },
+    {
+      "path": "../../packages/storage-adapter"
+    },
+    {
+      "path": "../../packages/compute-adapter"
+    },
+    {
+      "path": "../../packages/consensus"
+    },
+    {
+      "path": "../../packages/config"
+    }
+  ]
+}

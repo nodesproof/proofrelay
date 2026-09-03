@@ -1,0 +1,65 @@
+{
+  "name": "proofrelay",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "workers/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "clean": "rm -rf packages/*/dist apps/*/dist workers/*/dist",
+    "typecheck": "tsc -b tsconfig.build.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "contracts:build": "forge build --root contracts",
+    "contracts:test": "forge test --root contracts -vv",
+    "api": "node apps/api/dist/server.js",
+    "verifier:a": "VERIFIER_PROFILE=a node workers/verifier/dist/main.js",
+    "verifier:b": "VERIFIER_PROFILE=b node workers/verifier/dist/main.js",
+    "adjudicator": "node workers/adjudicator/dist/main.js",
+    "wallets": "node scripts/wallets.mjs",
+    "fund": "node scripts/fund.mjs",
+    "deploy": "bash scripts/deploy.sh --broadcast",
+    "approve-verifiers": "node scripts/approve-verifiers.mjs",
+    "roles": "node scripts/roles.mjs",
+    "roles:separate": "node scripts/roles.mjs separate",
+    "roles:apply": "node scripts/roles.mjs apply",
+    "migrate": "node scripts/migrate.mjs",
+    "seed": "node scripts/seed.mjs",
+    "doctor": "node scripts/doctor.mjs",
+    "dev": "node scripts/dev.mjs",
+    "pm2:start": "npm run build && npm run build:web && pm2 start ecosystem.config.cjs && pm2 save",
+    "pm2:reload": "npm run build && npm run build:web && pm2 reload ecosystem.config.cjs",
+    "pm2:stop": "pm2 stop ecosystem.config.cjs",
+    "pm2:logs": "pm2 logs /proofrelay-/ --lines 50",
+    "pm2:status": "pm2 list",
+    "web": "npm --prefix proofrelay-frontend run dev",
+    "build:web": "npm --prefix proofrelay-frontend run build",
+    "verify-abi": "node scripts/verify-abi.mjs",
+    "check:storage": "node scripts/checks/storage-live.mjs",
+    "check:artifact": "node scripts/checks/verify-live-artifact.mjs",
+    "check:replay": "node scripts/checks/replay-live-task.mjs",
+    "test:db": "createdb proofrelay_test 2>/dev/null; DATABASE_URL=\"postgres:///proofrelay_test?host=%2Fvar%2Frun%2Fpostgresql\" node scripts/migrate.mjs",
+    "check:post-task": "node scripts/checks/post-task.mjs",
+    "check:full-cycle": "node scripts/checks/full-cycle.mjs",
+    "check:lifecycle": "node scripts/checks/lifecycle-paths.mjs",
+    "check:api": "node scripts/checks/api-surface.mjs",
+    "check:index": "node scripts/checks/index-live.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "dependencies": {
+    "viem": "^2.21.55"
+  }
+}

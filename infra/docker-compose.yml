@@ -1,0 +1,119 @@
+# Everything except the 0G endpoints. Only the 0G calls leave this network.
+#
+# Run from the repo root so the build context and --env-file line up:
+#   docker compose -f infra/docker-compose.yml --env-file .env up --build
+
+name: proofrelay
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: proofrelay
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: proofrelay
+    # Loopback only. The published form (`"5432:5432"`) reaches every interface,
+    # and Docker writes its own DOCKER-USER iptables rules, so a host firewall
+    # does not cover it — the read model the keeper settles from would be
+    # reachable from the network with one guessable credential.
+    ports: ["127.0.0.1:5432:5432"]
+    volumes:
+      - proofrelay-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U proofrelay -d proofrelay"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    command: ["node", "scripts/migrate.mjs"]
+    environment:
+      DATABASE_URL: postgres://proofrelay:${POSTGRES_PASSWORD}@postgres:5432/proofrelay
+    env_file: [../.env]
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  api:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    command: ["node", "apps/api/dist/server.js"]
+    environment:
+      DATABASE_URL: postgres://proofrelay:${POSTGRES_PASSWORD}@postgres:5432/proofrelay
+      API_HOST: 0.0.0.0
+      API_PORT: "8080"
+      CORS_ORIGINS: http://localhost:8081
+    env_file: [../.env]
+    ports: ["8080:8080"]
+    volumes:
+      # The local mirror of every uploaded artifact. Sharing it across services
+      # means a report is readable even while 0G Storage is having a bad minute.
+      - proofrelay-storage:/app/.proofrelay
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  verifier-a:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    command: ["node", "workers/verifier/dist/main.js"]
+    environment:
+      VERIFIER_PROFILE: a
+      DATABASE_URL: postgres://proofrelay:${POSTGRES_PASSWORD}@postgres:5432/proofrelay
+    env_file: [../.env]
+    volumes:
+      - proofrelay-storage:/app/.proofrelay
+    depends_on:
+      api: { condition: service_healthy }
+    restart: unless-stopped
+
+  verifier-b:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    command: ["node", "workers/verifier/dist/main.js"]
+    environment:
+      VERIFIER_PROFILE: b
+      DATABASE_URL: postgres://proofrelay:${POSTGRES_PASSWORD}@postgres:5432/proofrelay
+    env_file: [../.env]
+    volumes:
+      - proofrelay-storage:/app/.proofrelay
+    depends_on:
+      api: { condition: service_healthy }
+    restart: unless-stopped
+
+  adjudicator:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    command: ["node", "workers/adjudicator/dist/main.js"]
+    environment:
+      DATABASE_URL: postgres://proofrelay:${POSTGRES_PASSWORD}@postgres:5432/proofrelay
+    env_file: [../.env]
+    volumes:
+      - proofrelay-storage:/app/.proofrelay
+    depends_on:
+      api: { condition: service_healthy }
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.web
+      args:
+        VITE_API_URL: http://localhost:8080
+    ports: ["8081:80"]
+    depends_on:
+      api: { condition: service_healthy }
+
+volumes:
+  proofrelay-db:
+  proofrelay-storage:

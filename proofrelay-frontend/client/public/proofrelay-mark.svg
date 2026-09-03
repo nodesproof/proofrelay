@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="ProofRelay mark">
+  <title>ProofRelay mark</title>
+  <!-- Evidence Ledger palette: Ledger Ink #0D1721 ground, Proof Citrus #C7F36B accent.
+       The rail renders this at 37px inside a 31px window with mix-blend-mode: screen,
+       so everything is kept inside r=20 to survive the crop, and the ink ground is a
+       disc rather than a full bleed: under screen it reads as a soft seal behind the
+       relay instead of a lighter plaque pasted onto the sidebar. -->
+  <circle cx="24" cy="24" r="19.8" fill="#0D1721"/>
+  <g fill="none" stroke="#C7F36B" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="24" cy="24" r="16.4" stroke-width="2.2" stroke-opacity="0.45" stroke-dasharray="79 24" transform="rotate(-56 24 24)"/>
+    <path d="M13.8 24.4 L21.2 31.8 L34.2 16.8" stroke-width="3.6"/>
+  </g>
+  <circle cx="13.8" cy="24.4" r="3.1" fill="#C7F36B"/>
+</svg>

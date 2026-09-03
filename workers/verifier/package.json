@@ -1,0 +1,21 @@
+{
+  "name": "@proofrelay/worker-verifier",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/main.js",
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@proofrelay/schemas": "1.0.0",
+    "@proofrelay/chain-client": "1.0.0",
+    "@proofrelay/storage-adapter": "1.0.0",
+    "@proofrelay/compute-adapter": "1.0.0",
+    "@proofrelay/consensus": "1.0.0",
+    "viem": "^2.21.55",
+    "@proofrelay/config": "1.0.0"
+  }
+}

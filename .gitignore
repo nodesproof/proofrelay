@@ -1,0 +1,32 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+.env.local
+.env.*.local
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+.proofrelay/
+coverage/
+proofrelay-frontend/dist/
+proofrelay-frontend/.manus-logs/
+# forge writes a solc cache at the repo root when run with --root
+cache/
+*.log
+.DS_Store
+
+# Per-role env files: each holds one process's signing key and compute key.
+.env.*
+!.env.example
+!.env.*.example
+
+# PM2 process logs
+logs/
+
+# Env snapshots taken before a network switch; they contain signing keys.
+backups/
+
+# Raw screen recordings and scratch images
+*.mkv
+ChatGPT Image*.png

@@ -1,0 +1,81 @@
+{
+ "taskId": "0xff4d4c2fcebe0d134b409e311a8dff84944fa971eee310bb60eb3df73b98e8a3",
+ "network": "0G mainnet \u00b7 16661",
+ "lines": [
+  {
+   "ts": "2026-09-03T12:46:42.870Z",
+   "src": "api",
+   "msg": "task prepared"
+  },
+  {
+   "ts": "2026-09-03T12:46:55.038Z",
+   "src": "api",
+   "msg": "indexed"
+  },
+  {
+   "ts": "2026-09-03T12:47:19.043Z",
+   "src": "verifier-a",
+   "msg": "committed report"
+  },
+  {
+   "ts": "2026-09-03T12:47:20.923Z",
+   "src": "api",
+   "msg": "indexed"
+  },
+  {
+   "ts": "2026-09-03T12:47:24.298Z",
+   "src": "verifier-b",
+   "msg": "committed report"
+  },
+  {
+   "ts": "2026-09-03T12:47:33.342Z",
+   "src": "verifier-a",
+   "msg": "revealed report"
+  },
+  {
+   "ts": "2026-09-03T12:47:36.737Z",
+   "src": "verifier-b",
+   "msg": "revealed report"
+  },
+  {
+   "ts": "2026-09-03T12:47:38.575Z",
+   "src": "api",
+   "msg": "queued consensus evaluation"
+  },
+  {
+   "ts": "2026-09-03T12:48:03.204Z",
+   "src": "api",
+   "msg": "consensus evaluated"
+  },
+  {
+   "ts": "2026-09-03T12:48:03.205Z",
+   "src": "api",
+   "msg": "job done"
+  },
+  {
+   "ts": "2026-09-03T12:48:13.754Z",
+   "src": "verifier-a",
+   "msg": "holding rewards until they cover the gas to collect them"
+  },
+  {
+   "ts": "2026-09-03T12:48:14.344Z",
+   "src": "verifier-b",
+   "msg": "holding rewards until they cover the gas to collect them"
+  },
+  {
+   "ts": "2026-09-03T12:48:18.361Z",
+   "src": "api",
+   "msg": "keeper transaction confirmed"
+  },
+  {
+   "ts": "2026-09-03T12:48:18.361Z",
+   "src": "api",
+   "msg": "finalizeConsensus submitted"
+  },
+  {
+   "ts": "2026-09-03T12:48:18.363Z",
+   "src": "api",
+   "msg": "job done"
+  }
+ ]
+}
