@@ -1,5 +1,10 @@
 # Recovered ABI — ProofRelay @ 0xc1E353cb44eA09729143f06Af97E51FB952b33D7 (0G Galileo, chainId 16602)
 
+> **Build-time notes.** Written while working out an earlier deployment, in early
+> September 2026, against 0G's test network. Kept as a record of what was
+> learned rather than updated to describe the mainnet deployment; where an
+> endpoint or address here differs from `README.md`, the README is current.
+
 The contract source was lost with the rest of the backend; the deployment survives.
 This ABI was recovered from the deployed bytecode (PUSH4 selector extraction),
 real on-chain calldata (4 createTask, 6 commitReport, 6 revealReport, 1 openChallenge,

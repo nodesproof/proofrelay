@@ -1,5 +1,10 @@
 # ProofRelay — Frontend Live-Data Contract
 
+> **Build-time notes.** Written while working out the web app's data contract, in early
+> September 2026, against 0G's test network. Kept as a record of what was
+> learned rather than updated to describe the mainnet deployment; where an
+> endpoint or address here differs from `README.md`, the README is current.
+
 **Scope:** every mock/hardcoded value rendered by `proofrelay-frontend/client/src/`, mapped to a concrete live source (API field or onchain read) and its derivation.
 **Deployment under contract:** `ProofRelay @ 0xc1E353cb44eA09729143f06Af97E51FB952b33D7`, 0G Galileo, chainId **16602**, deploy block **52352124**, RPC `https://evmrpc-testnet.0g.ai`, explorer `https://chainscan-galileo.0g.ai`.
 

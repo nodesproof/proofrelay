@@ -1,21 +1,22 @@
-# Deploying ProofRelay to 0G Galileo
+# Deploying ProofRelay to 0G
 
 ## Current deployment
 
 | | |
 |---|---|
-| Contract | `0xc1E353cb44eA09729143f06Af97E51FB952b33D7` |
-| Deployed at block | `52352124` — the indexer starts here, not at genesis |
-| Explorer | https://chainscan-galileo.0g.ai/address/0xc1E353cb44eA09729143f06Af97E51FB952b33D7 |
-| Deploy cost | ~0.021 0G at 4 gwei |
+| Contract | `0xD3101C19175b50fD47C9e0B14A2dc63485f527D1` |
+| Chain | 0G mainnet, 16661 |
+| Deployed at block | `43394193` — the indexer starts here, not at genesis |
+| Explorer | https://chainscan.0g.ai/address/0xD3101C19175b50fD47C9e0B14A2dc63485f527D1 |
+| Deploy cost | 0.018764 0G at 4 gwei, read off the receipt |
 
-## Things Galileo does differently
+## Things 0G does differently
 
 Three chain behaviours cost real debugging time. All three are handled in the
 scripts and the chain client now, but they are worth knowing if you deploy by
 hand — each one produces an error message that points somewhere else.
 
-**A minimum priority fee is enforced.** Galileo rejects transactions below a
+**A minimum priority fee is enforced.** 0G rejects transactions below a
 2 gwei tip with `transaction gas price below minimum: gas tip cap 1`. Foundry's
 own estimator produced a 1 wei tip here, so `deploy.sh` reads
 `eth_maxPriorityFeePerGas` from the chain and floors it at 2 gwei.
@@ -42,12 +43,12 @@ real cost.
 
 | | |
 |---|---|
-| Chain | 0G Galileo testnet |
+| Chain | 0G mainnet |
 | Chain ID | **16602** |
 | RPC | `https://evmrpc-testnet.0g.ai` |
-| Explorer | `https://chainscan-galileo.0g.ai` |
-| Storage explorer | `https://storagescan-galileo.0g.ai` |
-| Storage indexer | `https://indexer-storage-testnet-turbo.0g.ai` |
+| Explorer | `https://chainscan.0g.ai` |
+| Storage explorer | `https://storagescan.0g.ai` |
+| Storage indexer | `https://indexer-storage-turbo.0g.ai` |
 | Compute router | `https://router-api-testnet.integratenetwork.work/v1` (API key from `pc.testnet.0g.ai`) |
 | Compute model | `qwen2.5-omni` — the only chat model on the testnet router |
 | Faucet | `https://faucet.0g.ai` — 0.1 0G per wallet per day |
@@ -150,7 +151,7 @@ npm run fund
 
 ### What it actually costs
 
-At the 4 gwei Galileo charges, a full cycle is well inside a single 0.1 0G drip:
+At the 4 gwei both 0G networks charge, a full cycle costs:
 
 | Operation | Gas | Cost |
 |---|---:|---:|
@@ -192,7 +193,7 @@ PROOFRELAY_DEPLOY_BLOCK=...   # the indexer starts here instead of at genesis
 ```
 
 `PROOFRELAY_DEPLOY_BLOCK` is not optional on a public chain: without it the
-indexer would scan from block 0, which on Galileo is over 52 million blocks, and
+indexer would scan from block 0, which on either 0G network is tens of millions
 the API refuses to start rather than attempt it.
 
 ### `.env.local` overrides all of this
@@ -230,7 +231,7 @@ once before approving, or approve first and let registration follow.
 ```
 STORAGE_DRIVER=zerog
 STORAGE_PRIVATE_KEY=0x...                 # funded; pays 0G Storage fees
-STORAGE_INDEXER_RPC=https://indexer-storage-testnet-turbo.0g.ai
+STORAGE_INDEXER_RPC=https://indexer-storage-turbo.0g.ai
 
 COMPUTE_DRIVER=zerog-router
 COMPUTE_API_KEY=sk-...                    # from https://pc.testnet.0g.ai

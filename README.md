@@ -18,10 +18,13 @@ what each verifier concluded, and where they disagreed.
 
 | | |
 |---|---|
-| Contract | [`0x486Dc550792889B102ef0c2Cf984526628C39D0E`](https://chainscan-galileo.0g.ai/address/0x486Dc550792889B102ef0c2Cf984526628C39D0E) |
-| Chain | 0G Galileo testnet, chain ID **16602** |
-| Deploy block | `52792094` — the indexer starts here, not at genesis |
-| Storage | 0G Storage via `indexer-storage-testnet-turbo.0g.ai` |
+| Contract | [`0xD3101C19175b50fD47C9e0B14A2dc63485f527D1`](https://chainscan.0g.ai/address/0xD3101C19175b50fD47C9e0B14A2dc63485f527D1) |
+| Chain | 0G mainnet, chain ID **16661** |
+| Deploy block | `43394193` — the indexer starts here, not at genesis |
+| Storage | 0G Storage via `indexer-storage-turbo.0g.ai` |
+| Compute | 0G Compute Router, `deepseek-v4-flash`, TEE attested per request |
+| App | <https://proofrelay.nectiq.xyz> |
+| API | <https://api-proofrelay.nectiq.xyz/health> |
 
 `npm run verify-abi` proves the TypeScript client, the Solidity source and the
 deployed bytecode all agree. The check that settles it is byte equality: the live
@@ -36,7 +39,8 @@ npm install
 npm run build
 
 npm run wallets          # generate a key per role into .env (safe to re-run)
-# fund the printed operator address at https://faucet.0g.ai
+# send 0G to the operator address it prints — mainnet has no faucet, and
+# `npm run wallets` tells you which network CHAIN_ID selected
 npm run fund             # spread gas from the operator to the role wallets
 
 createdb proofrelay
@@ -82,12 +86,14 @@ effective gas price, so these are the mainnet numbers too:
 
 A full two-verifier task therefore costs the creator about 0.001 0G plus its
 bounty, each verifier about 0.0014 0G, the keeper about 0.0008 0G, and the
-storage key 0.0012 0G per artifact it writes — up to 21 on one `prepare`. All of
-it fits inside a single faucet drip on Galileo; on mainnet it is the same figure
-in 0G, bought rather than dripped.
+storage key 0.0012 0G per artifact it writes — up to 21 on one `prepare`.
+Deploying and bringing the whole thing up cost 0.0188 0G in gas; the six role
+wallets were then topped up to 0.27 0G between them, which is float rather than
+spend and comes back out with `withdraw`.
 
-See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for what Galileo does differently
-(a 2 gwei minimum tip, and receipts that lag block production — both handled).
+See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for what 0G does differently — a
+minimum priority fee the estimator does not reach on its own, and receipts that
+lag block production. Both are handled; both took a while to find.
 
 ## What is in here
 
@@ -147,13 +153,14 @@ npm run check:api        # every HTTP route, including the ones that refuse
 
 | | |
 |---|---|
-| Contract | 169 Solidity tests, 443 TypeScript tests; deployed bytecode is byte-for-byte the code in this repo |
-| 0G Storage | live — upload, download and hash round-trip verified on Galileo |
+| Contract | 169 Solidity tests, 459 TypeScript tests; deployed bytecode is byte-for-byte the code in this repo |
+| 0G Storage | live on mainnet — upload, download and hash round-trip verified against 22 nodes |
 | 0G Chain | live — the running system settled a task on its own: escrow, two commits, two reveals, consensus, finalization and withdrawal, with no operator step |
-| 0G Compute | live — reports are scored on the testnet router by a TEE-attested provider (TeeTLS over Intel TDX, verified by dstack). Every report records the provider address, the model, and whether the router affirmed attestation for that response. Without a key a verifier falls back to the local deterministic engine and says so in the trace |
+| 0G Compute | live on mainnet — both verifiers score reports through the Router on `deepseek-v4-flash`, a seedable model served by a TEE-attested provider (TeeTLS over Intel TDX). Every report records the provider address, the model, and whether the router affirmed attestation for that response. Without a key a verifier falls back to the local deterministic engine and says so in the trace |
 | Read model | live — rebuilt from the deployment block, every manifest fetched from 0G Storage and hash-checked |
 
 [`docs/VERIFICATION.md`](docs/VERIFICATION.md) has the commands and their real
 output for each of these, including what is *not* verified.
 
-Testnet only. Public data only. Not investment, medical, legal or credit advice.
+Running on mainnet with real value at stake. Public data only. Not investment,
+medical, legal or credit advice.

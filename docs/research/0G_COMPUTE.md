@@ -1,5 +1,10 @@
 # 0G Compute — Integration Research for ProofRelay
 
+> **Build-time notes.** Written while working out 0G Compute, in early
+> September 2026, against 0G's test network. Kept as a record of what was
+> learned rather than updated to describe the mainnet deployment; where an
+> endpoint or address here differs from `README.md`, the README is current.
+
 **Author:** research subagent · **Date:** 2026-09-02
 **Method:** every number, URL, model id, package version, contract address and error string below was verified by live probe (curl / `cast` / npm registry) or read verbatim from `docs.0g.ai` raw markdown. Probes executed **2026-09-01T22:29–22:45Z**. Where I could not verify something, it is labelled **UNVERIFIED**.
 

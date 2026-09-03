@@ -1,6 +1,14 @@
-# What has actually been verified
+> **Provenance.** The runs recorded below were executed during development, in
+> early September 2026, against 0G's test network — the transaction hashes and
+> explorer links belong to that chain and are left exactly as they were produced.
+> Rewriting them to read as mainnet would make them unverifiable.
+>
+> The mainnet deployment they led to is `0xD3101C19175b50fD47C9e0B14A2dc63485f527D1` on chain 16661, deployed at block
+> 43394193. `npm run verify-abi` re-runs the bytecode-equality proof against it,
+> and `docs/demo/assets/live-run.json` records one full task there from prepare
+> to settlement.
 
-Every claim below was executed against 0G Galileo (chain 16602) or against the
+Every claim below was executed against 0G's test network (chain 16602) or against the
 artifacts already on 0G Storage. Each has a command you can re-run.
 
 ## The rebuilt contract matches the one that is deployed

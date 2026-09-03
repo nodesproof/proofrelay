@@ -1,3 +1,8 @@
+> **Build-time notes.** Written while working out 0G Storage, in early
+> September 2026, against 0G's test network. Kept as a record of what was
+> learned rather than updated to describe the mainnet deployment; where an
+> endpoint or address here differs from `README.md`, the README is current.
+
 I have completed live, end-to-end verification against 0G Galileo. Here is the report.
 
 ---
