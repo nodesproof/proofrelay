@@ -5,14 +5,15 @@
 // the field limits from `PrepareTaskRequest`, because a reference that drifts
 // from the code it describes is worse than no reference: it is a confident lie.
 // The deployment section reads `/health` at request time rather than hardcoding,
-// so it can never describe a contract this UI is not talking to.
+// so it can never describe a contract this UI is not talking to. The report
+// example is a real mainnet report with its hashes elided, not an invented one.
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { ArrowUpRight, BookOpen, Check, ChevronRight, Code2, Coins, Database, FileCheck2, Fingerprint, Gavel, GitBranch, Info, Layers3, Network, Server, ShieldCheck, Sparkles, Terminal, Users, Zap } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useHealth } from "@/hooks/useProofRelay";
-import { EXPLORER_URL, NETWORK_NAME } from "@/lib/wagmi";
+import { ACTIVE_CHAIN_ID, EXPLORER_URL, NETWORK_NAME } from "@/lib/wagmi";
 
 const sections = [
   "What it is",
@@ -41,52 +42,63 @@ const taskStates: [string, string][] = [
 ];
 
 const reportShape = `{
-  "kind": "verification-report",
-  "schemaVersion": "0.1.0",
-  "taskId": "0xa0eb111a…f9a65",
-  "manifestHash": "0x7d1b7c34…ae0ae",
+  "kind": "verifier-report",
+  "schemaVersion": "1.0.0",
+  "taskId": "0xff4d4c2f…b98e8a3",
+  "manifestHash": "0x39d4e6eb…cd6096b",
   "verifier": {
-    "address": "0xeFf4313A…1e8FA",
-    "verifierId": "verifier-a",
-    "modelId": "zerog-router/qwen2.5-omni",
+    "address": "0xE51DB467…f117Cca",
+    "verifierId": "verifier-b",
+    "modelId": "zerog-router/deepseek-v4-flash",
     "pipelineVersion": "0.1.0"
   },
   "claims": [{
-    "claimId": "c1",
+    "claimId": "claim-001",
     "verdict": "SUPPORTED",
-    "confidence": 0.9573,
+    "confidence": 1,
+    "reasoningSummary": "The span explicitly states…",
     "sources": [{
-      "contentHash": "0x1111…1111",
-      "quotedSpan": "…",
-      "spanStart": 0
+      "contentHash": "sha256:e08839ab…06f6dfe",
+      "quotedSpan": "0G Storage can be used completely standalone…"
     }]
   }],
-  "compute": {
+  "summary": { "supported": 2, "contradicted": 0, "insufficient": 0, "meanConfidence": 1 },
+  "compute": [{
     "operation": "evidence-scoring",
-    "provider": "zerog-router:0xa48f0128…67836",
+    "provider": "zerog-router:0xd9966e13…8C471C",
+    "modelId": "zerog-router/deepseek-v4-flash",
     "verified": true,
     "attestation": {
       "verifiability": "TeeTLS",
       "teeType": "TDX",
       "teeVerifier": "dstack",
       "source": "router-directory"
-    }
-  }
+    },
+    "inputHash": "0xca80cc1b…b0763cc0",
+    "outputHash": "0x422e1f22…f373e73877"
+  }]
 }`;
 
-const verifierEnv = `# .env.verifier-a — one file per operator
-OG_RPC_URL=https://evmrpc-testnet.0g.ai
-PROOFRELAY_ADDRESS=0x486Dc550…C39D0E
-VERIFIER_PRIVATE_KEY=0x…          # never commit this
+const verifierEnv = `# .env — one verifier, and nothing else
+CHAIN_ID=16661
+OG_RPC_URL=https://evmrpc.0g.ai
+PROOFRELAY_ADDRESS=0xD3101C19175b50fD47C9e0B14A2dc63485f527D1
+
+# Your onchain identity: it registers, commits, reveals and
+# collects, and writes reports to 0G Storage.
+VERIFIER_PROFILE=a                # a = depth 2 / 0.55, b = depth 3 / 0.50
+VERIFIER_A_PRIVATE_KEY=0x…        # never commit this
 STORAGE_DRIVER=zerog
 
-# Optional. Without it the worker scores evidence with the
-# local deterministic engine and says so in every report.
+# A key from https://pc.0g.ai. Without it the worker scores
+# evidence with the local deterministic engine and says so in
+# every report.
 COMPUTE_DRIVER=zerog-router
 COMPUTE_API_KEY=sk-…
+COMPUTE_VERIFY_TEE=true
 
 # Rewards are pull-based, so collecting costs gas. Nothing is
-# claimed until the unclaimed total clears this floor.
+# claimed until the unclaimed total clears this floor (0.002 0G).
 VERIFIER_MIN_COLLECT_WEI=2000000000000000`;
 
 export default function ProtocolDocs() {
@@ -110,7 +122,7 @@ export default function ProtocolDocs() {
       </aside>
 
       <article className="docs-article">
-        <div className="docs-kicker"><span className="overline-mark" />PROOFRELAY / V1 ON GALILEO</div>
+        <div className="docs-kicker"><span className="overline-mark" />PROOFRELAY / V1 ON {NETWORK_NAME.toUpperCase()}</div>
         <h2>{active}</h2>
 
         {active === "What it is" && <>
@@ -173,13 +185,13 @@ export default function ProtocolDocs() {
               <tr><td>claimReward / withdraw</td><td>beneficiary</td><td>pull-based, always self-service</td></tr>
             </tbody>
           </table></div>
-          <div className="docs-note"><Info size={16} /><div><strong>The verifier set is permissioned today</strong><p>Registration is open, but a verifier cannot commit until an admin approves it. That is a deliberate testnet choice: with slashing set to zero there is currently no economic penalty for a bad report, so entry is gated instead.</p></div></div>
+          <div className="docs-note"><Info size={16} /><div><strong>The verifier set is permissioned today</strong><p>Registration is open, but a verifier cannot commit until an admin approves it. That is a deliberate choice for this deployment: with slashing set to zero there is currently no economic penalty for a bad report, so entry is gated instead.</p></div></div>
         </>}
 
         {active === "Create a task" && <>
           <p className="docs-lead">You need a wallet on {NETWORK_NAME} with enough balance for the bounty and gas. Everything else happens in the browser.</p>
           <div className="docs-steps">
-            <div className="docs-step"><div><strong>Connect a wallet</strong><p>The header button connects and switches you to Galileo, chain ID 16602, if you are on another network.</p></div></div>
+            <div className="docs-step"><div><strong>Connect a wallet</strong><p>The header button connects and switches you to {NETWORK_NAME}, chain ID {ACTIVE_CHAIN_ID}, if you are on another network — adding it to MetaMask first if the wallet has never seen it.</p></div></div>
             <div className="docs-step"><div><strong>Describe what to check</strong><p>Give a question, the claims to test, and the sources to test them against. A source can be a URL or text you paste directly.</p></div></div>
             <div className="docs-step"><div><strong>The API snapshots the sources</strong><p>Each source is fetched once, stripped of active markup, hashed, and pinned to 0G Storage. You get back a manifest hash and pointer — the exact bytes every verifier will read.</p></div></div>
             <div className="docs-step"><div><strong>Sign the transaction</strong><p>Your wallet sends <code>createTask</code> with the bounty as value. Before it asks you to sign, the browser re-checks that the prepared manifest matches what you typed and refuses if it does not.</p></div></div>
@@ -199,25 +211,25 @@ export default function ProtocolDocs() {
               <tr><td>Bounty</td><td>at least 0.0001 0G</td><td className="num">—</td></tr>
             </tbody>
           </table></div>
-          <div className="docs-note"><Info size={16} /><div><strong>Windows are per task, not global</strong><p>You choose them at creation and they are pinned into contract state. Short windows settle fast but give a slow verifier no room; the defaults are a reasonable starting point on testnet.</p></div></div>
+          <div className="docs-note"><Info size={16} /><div><strong>Windows are per task, not global</strong><p>You choose them at creation and they are pinned into contract state. Short windows settle fast but give a slow verifier no room; the defaults are a reasonable starting point.</p></div></div>
         </>}
 
         {active === "Run a verifier" && <>
           <p className="docs-lead">A verifier is a long-running worker. It watches the chain for open tasks, reads the snapshot from 0G Storage, scores the claims, and publishes a report on its own key.</p>
           <div className="docs-steps">
-            <div className="docs-step"><div><strong>Fund a wallet</strong><p>A dedicated key with a small 0G balance. One verification costs roughly 0.0005 0G in gas across commit and reveal.</p></div></div>
+            <div className="docs-step"><div><strong>Fund a wallet</strong><p>A dedicated key with a small 0G balance. Measured on mainnet at 4 gwei: registering costs about 0.0007 0G once, and each task about 0.0025 0G — 0.0006 to commit, 0.0007 to reveal and 0.0012 to write the report to 0G Storage on the same key.</p></div></div>
             <div className="docs-step"><div><strong>Register onchain</strong><p><code>registerVerifier</code> records your metadata hash and pointer. Registration alone does not let you commit.</p></div></div>
             <div className="docs-step"><div><strong>Get approved</strong><p>An admin calls <code>setVerifierApproval</code>. Until then <code>commitReport</code> reverts with <code>VerifierNotActive</code>.</p></div></div>
-            <div className="docs-step"><div><strong>Write the role file</strong><p>Each operator gets its own env file so two verifiers never share a key, a profile, or a compute quota.</p></div></div>
-            <div className="docs-step"><div><strong>Start the worker</strong><p>It polls, commits, reveals, and batches reward collection on its own. Nothing else is required to keep it running.</p></div></div>
+            <div className="docs-step"><div><strong>Write the env file</strong><p>Copy <code>.env.verifier-standalone.example</code>. It is the whole configuration — no database, no API, no operator keys — and two verifiers never share a key, a profile, or a compute quota.</p></div></div>
+            <div className="docs-step"><div><strong>Start the worker</strong><p>It polls, commits, reveals, and batches reward collection on its own. It talks to the contract, 0G Storage and 0G Compute directly — never to this site or its API — so nothing else is required to keep it running.</p></div></div>
           </div>
           <div className="code-block">
-            <div className="code-head"><span><Code2 size={13} />.env.verifier-a</span><button onClick={() => copy(verifierEnv, "Verifier config")}>Copy</button></div>
+            <div className="code-head"><span><Code2 size={13} />.env</span><button onClick={() => copy(verifierEnv, "Verifier config")}>Copy</button></div>
             <pre>{verifierEnv}</pre>
           </div>
           <div className="code-block">
-            <div className="code-head"><span><Terminal size={13} />run</span><button onClick={() => copy("npm run build\nVERIFIER_PROFILE=a node workers/verifier/dist/main.js", "Run command")}>Copy</button></div>
-            <pre>{`npm run build\nVERIFIER_PROFILE=a node workers/verifier/dist/main.js`}</pre>
+            <div className="code-head"><span><Terminal size={13} />run</span><button onClick={() => copy("cp .env.verifier-standalone.example .env\ndocker compose -f infra/docker-compose.verifier.yml up --build", "Run command")}>Copy</button></div>
+            <pre>{`cp .env.verifier-standalone.example .env   # then fill in the two keys\ndocker compose -f infra/docker-compose.verifier.yml up --build`}</pre>
           </div>
           <h3>Two verifiers, deliberately unalike</h3>
           <p className="docs-body">The reference deployment runs profile A at evidence depth 2 and support threshold 0.55, and profile B at depth 3 and 0.50. That is the point: agreement has to mean two differently configured pipelines reached the same verdict, not that one pipeline ran twice.</p>
@@ -228,11 +240,11 @@ export default function ProtocolDocs() {
           <p className="docs-lead">ProofRelay uses 0G as three separate surfaces. Large artifacts live in Storage, inference runs on Compute, and only the compact settlement state touches the Chain.</p>
           <div className="og-integration-grid">
             <div><Database size={20} /><span>0G Storage</span><strong>Artifacts</strong><small>Manifests, source snapshots, reports and adjudications, addressed by content hash.</small></div>
-            <div><Zap size={20} /><span>0G Compute</span><strong>Verification</strong><small>Claim extraction and evidence scoring on a TEE-attested provider, through the testnet router.</small></div>
+            <div><Zap size={20} /><span>0G Compute</span><strong>Verification</strong><small>Claim extraction and evidence scoring on a TEE-attested provider, through the 0G Compute router.</small></div>
             <div><Layers3 size={20} /><span>0G Chain</span><strong>Settlement</strong><small>Escrow, commitments, reveals, disputes and payouts as public contract state.</small></div>
           </div>
           <h3>What a compute call records</h3>
-          <p className="docs-body">Every report carries the trace of the inference that produced it: which provider served the request, which model, whether the router affirmed the TEE attestation for that response, and what kind of enclave the provider runs. The reference deployment scores evidence with <code>qwen2.5-omni</code> on a provider attested as TeeTLS over Intel TDX, verified by dstack.</p>
+          <p className="docs-body">Every report carries the trace of the inference that produced it: which provider served the request, which model, whether the router affirmed the TEE attestation for that response, and what kind of enclave the provider runs. The reference deployment scores evidence with <code>deepseek-v4-flash</code> on a provider attested as TeeTLS over Intel TDX, verified by dstack — a model chosen because every mainnet provider serving it accepts a seed, which this pipeline sends on every completion and refuses to run without.</p>
           <div className="docs-table-wrap"><table className="docs-table">
             <thead><tr><th>Trace field</th><th>Meaning</th></tr></thead>
             <tbody>
@@ -289,6 +301,7 @@ export default function ProtocolDocs() {
               <tr><td>minVerifierStake</td><td className="num">0</td><td>Reserved alongside slashing. No stake is required to operate today.</td></tr>
               <tr><td>keeperGracePeriod</td><td className="num">3 days</td><td>After the reveal deadline plus this, anyone may expire the task.</td></tr>
               <tr><td>adjudicationWindow</td><td className="num">7 days</td><td>How long an adjudicator has before the dispute can be expired by anyone.</td></tr>
+              <tr><td>claimGracePeriod</td><td className="num">7 days</td><td>Reserved. Set on this deployment, but no function in this version reads it.</td></tr>
             </tbody>
           </table></div>
           <div className="docs-note"><Info size={16} /><div><strong>Nothing is ever pushed to you</strong><p>Settlement allocates; it does not transfer. A beneficiary calls <code>claimReward</code> to move an allocation into their withdrawable balance, then <code>withdraw</code> to take it. A recipient that reverts on receipt can therefore never block anyone else's payout.</p></div></div>
@@ -306,7 +319,7 @@ export default function ProtocolDocs() {
             <div className="docs-fact"><span>Contract state</span><strong>{health.data ? health.data.paused ? "paused" : "accepting tasks" : "—"}</strong></div>
           </div>
           <div className="docs-note"><Info size={16} /><div><strong>These are the API's drivers, not the verifiers'</strong><p>The API snapshots sources and serves artifacts; it does not score evidence. Each verifier configures its own compute driver independently, so this row will read <code>local</code> even while every report is being produced on 0G Compute. The trace inside a report is the only place that says what actually ran.</p></div></div>
-          <div className="docs-note"><Info size={16} /><div><strong>Testnet, and audited only from the inside</strong><p>This deployment runs on 0G Galileo with testnet value. The contracts have been through an internal audit and a full regression suite, but not an external one — treat the bounties as what they are.</p></div></div>
+          <div className="docs-note"><Info size={16} /><div><strong>{ACTIVE_CHAIN_ID === 16661 ? "Real value, audited only from the inside" : "Audited only from the inside"}</strong><p>This deployment runs on {NETWORK_NAME}{ACTIVE_CHAIN_ID === 16661 ? " with real value" : ""}. The source is verified on ChainScan and Sourcify, so everything this page states can be checked against the bytecode; the contracts have been through an internal audit and a full regression suite, but not an external one. Size bounties accordingly.</p></div></div>
         </>}
 
         <div className="docs-bottom-cta">
