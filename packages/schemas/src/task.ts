@@ -60,7 +60,7 @@ export function outcomeName(value: number): OutcomeName {
  * Evidence Ledger design has three task tones (lime / sky / coral) and a task
  * is only "verified" once it settled on agreement.
  */
-export type DisplayStatus = "VERIFIED" | "IN REVIEW" | "DISPUTED" | "EXPIRED" | "CANCELLED";
+export type DisplayStatus = "VERIFIED" | "IN REVIEW" | "CONFLICT" | "NO QUORUM" | "DISPUTED" | "EXPIRED" | "CANCELLED";
 export type DisplayTone = "lime" | "sky" | "coral" | "ink";
 
 export function displayStatus(status: number, outcome: number): DisplayStatus {
@@ -68,7 +68,13 @@ export function displayStatus(status: number, outcome: number): DisplayStatus {
   if (status === TaskStatus.Expired) return "EXPIRED";
   if (status === TaskStatus.Disputed || status === TaskStatus.Adjudication) return "DISPUTED";
   if (status === TaskStatus.Finalized) {
-    return outcome === Outcome.Consensus ? "VERIFIED" : "DISPUTED";
+    // A finalized task is named by how it settled. "DISPUTED" is reserved for a
+    // challenge that is still on the table (Disputed / Adjudication above):
+    // verifiers that disagreed with no one challenging is a conflict, not a
+    // dispute, and too few reveals is no quorum.
+    if (outcome === Outcome.Consensus) return "VERIFIED";
+    if (outcome === Outcome.Conflict) return "CONFLICT";
+    if (outcome === Outcome.NoQuorum) return "NO QUORUM";
   }
   return "IN REVIEW";
 }
@@ -77,8 +83,10 @@ export function displayTone(display: DisplayStatus): DisplayTone {
   switch (display) {
     case "VERIFIED":
       return "lime";
+    case "CONFLICT":
     case "DISPUTED":
       return "coral";
+    case "NO QUORUM":
     case "EXPIRED":
     case "CANCELLED":
       return "ink";

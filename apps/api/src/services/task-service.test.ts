@@ -49,6 +49,7 @@ import {
   type AgreementInput,
   type TaskChainReader,
   type TaskServiceContext,
+  DISPLAY_STATUS_SQL,
 } from "./task-service.js";
 import { prepareChallenge, prepareTask, type PrepareServiceContext } from "./prepare-service.js";
 import {
@@ -1091,13 +1092,7 @@ describeDb("read model", () => {
   it("computes the same display status in SQL as in TypeScript", async () => {
     const { rows } = await db.query<{ status: number; outcome: number; display: string }>(
       `SELECT t.status, t.outcome,
-              CASE
-                WHEN t.status = 9 THEN 'CANCELLED'
-                WHEN t.status = 8 THEN 'EXPIRED'
-                WHEN t.status IN (5, 6) THEN 'DISPUTED'
-                WHEN t.status = 7 THEN CASE WHEN t.outcome = 1 THEN 'VERIFIED' ELSE 'DISPUTED' END
-                ELSE 'IN REVIEW'
-              END AS display
+                (${DISPLAY_STATUS_SQL}) AS display
        FROM (SELECT s AS status, o AS outcome
              FROM generate_series(0, 9) s, generate_series(0, 3) o) t`,
     );

@@ -35,7 +35,7 @@ export type ConsensusOutcome = "CONSENSUS" | "CONFLICT" | "NO_QUORUM";
  */
 export type Provenance = "chain" | "index" | "storage" | "derived";
 
-export type DisplayStatus = "VERIFIED" | "IN REVIEW" | "DISPUTED" | "EXPIRED" | "CANCELLED";
+export type DisplayStatus = "VERIFIED" | "IN REVIEW" | "CONFLICT" | "NO QUORUM" | "DISPUTED" | "EXPIRED" | "CANCELLED";
 
 export type Tone = "lime" | "sky" | "coral" | "ink";
 
@@ -53,6 +53,8 @@ export interface WorkspaceStats {
   openQueue: number;
   inReview: number;
   disputed: number;
+  conflict: number;
+  noQuorum: number;
   verifiedTasks: number;
   totalTasks: number;
   /** share of claims across settled tasks that carry at least one source pointer */

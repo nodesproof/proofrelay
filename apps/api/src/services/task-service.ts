@@ -120,6 +120,8 @@ const TERMINAL = [TaskStatus.None, TaskStatus.Finalized, TaskStatus.Expired, Tas
 const DISPLAY_STATUSES: DisplayStatus[] = [
   "VERIFIED",
   "IN REVIEW",
+  "CONFLICT",
+  "NO QUORUM",
   "DISPUTED",
   "EXPIRED",
   "CANCELLED",
@@ -133,12 +135,17 @@ const MAX_STATUS_CODE = Math.max(...Object.values(TaskStatus));
  * every row to group it in TypeScript. `task-service.test.ts` asserts the two
  * agree over every status/outcome pair, so a change to one fails on the other.
  */
-const DISPLAY_STATUS_SQL = `
+export const DISPLAY_STATUS_SQL = `
   CASE
     WHEN t.status = 9 THEN 'CANCELLED'
     WHEN t.status = 8 THEN 'EXPIRED'
     WHEN t.status IN (5, 6) THEN 'DISPUTED'
-    WHEN t.status = 7 THEN CASE WHEN t.outcome = 1 THEN 'VERIFIED' ELSE 'DISPUTED' END
+    WHEN t.status = 7 THEN CASE
+      WHEN t.outcome = 1 THEN 'VERIFIED'
+      WHEN t.outcome = 2 THEN 'CONFLICT'
+      WHEN t.outcome = 3 THEN 'NO QUORUM'
+      ELSE 'IN REVIEW'
+    END
     ELSE 'IN REVIEW'
   END`;
 
@@ -1574,6 +1581,8 @@ export async function workspaceStats(ctx: TaskServiceContext): Promise<Workspace
     open_queue: number;
     in_review: number;
     disputed: number;
+    conflict: number;
+    no_quorum: number;
     verified: number;
     overdue: number;
     created_current: number;
@@ -1586,6 +1595,8 @@ export async function workspaceStats(ctx: TaskServiceContext): Promise<Workspace
        count(*) FILTER (WHERE t.status IN (1, 2))::int AS open_queue,
        count(*) FILTER (WHERE t.status IN (3, 4))::int AS in_review,
        count(*) FILTER (WHERE (${DISPLAY_STATUS_SQL}) = 'DISPUTED')::int AS disputed,
+       count(*) FILTER (WHERE (${DISPLAY_STATUS_SQL}) = 'CONFLICT')::int AS conflict,
+       count(*) FILTER (WHERE (${DISPLAY_STATUS_SQL}) = 'NO QUORUM')::int AS no_quorum,
        count(*) FILTER (WHERE (${DISPLAY_STATUS_SQL}) = 'VERIFIED')::int AS verified,
        count(*) FILTER (
          WHERE t.status <> ALL($1::int[])
@@ -1681,6 +1692,8 @@ export async function workspaceStats(ctx: TaskServiceContext): Promise<Workspace
     openQueue: Number(tasks?.open_queue ?? 0),
     inReview: Number(tasks?.in_review ?? 0),
     disputed: Number(tasks?.disputed ?? 0),
+    conflict: Number(tasks?.conflict ?? 0),
+    noQuorum: Number(tasks?.no_quorum ?? 0),
     verifiedTasks: Number(tasks?.verified ?? 0),
     totalTasks: Number(tasks?.total ?? 0),
     evidenceCoveragePct: ratioPct(Number(coverage?.covered ?? 0), coverageSample),

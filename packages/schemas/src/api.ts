@@ -25,6 +25,8 @@ export type Provenance = z.infer<typeof Provenance>;
 export const DisplayStatusSchema = z.enum([
   "VERIFIED",
   "IN REVIEW",
+  "CONFLICT",
+  "NO QUORUM",
   "DISPUTED",
   "EXPIRED",
   "CANCELLED",
@@ -47,6 +49,8 @@ export const WorkspaceStats = z.object({
   openQueue: z.number().int(),
   inReview: z.number().int(),
   disputed: z.number().int(),
+  conflict: z.number().int(),
+  noQuorum: z.number().int(),
   verifiedTasks: z.number().int(),
   totalTasks: z.number().int(),
   /** share of claims across settled tasks that carry at least one source pointer */
