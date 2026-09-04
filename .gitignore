@@ -30,3 +30,6 @@ backups/
 # Raw screen recordings and scratch images
 *.mkv
 ChatGPT Image*.png
+
+# Hackathon submission text — kept locally, never published with the code.
+docs/SUBMISSION.md
