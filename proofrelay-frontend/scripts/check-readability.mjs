@@ -61,7 +61,7 @@ const MEASURED_INK = new Set([
  */
 const INK_CONTAINER_PREFIXES = [
   ".code-block", ".code-head", ".topbar-pop", ".hero-visual", ".workspace-avatar",
-  ".task-banner-", ".task-hero-", ".visual-", ".workflow-copy", ".workflow-steps", ".docs-bottom-cta",
+  ".task-banner-", ".task-hero-", ".evidence-flow", ".flow-", ".visual-", ".workflow-copy", ".workflow-steps", ".docs-bottom-cta",
 ];
 
 function partIsInk(part) {
