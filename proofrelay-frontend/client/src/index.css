@@ -562,3 +562,9 @@ button.signal-row:disabled { opacity: .72; }
 .flow-pulse { fill: #c7f36b; filter: drop-shadow(0 0 6px #c7f36b); }
 @keyframes flow-wait { 0%, 100% { opacity: 0; r: 14px; } 50% { opacity: .8; r: 19px; } }
 @media (prefers-reduced-motion: reduce) { .flow-node-group.waiting .flow-halo { animation: none; opacity: .6; } .flow-edge-lit { transition: none; } }
+
+/* The wrong-network prompt: the existing modal, with the two actions side by
+   side and the dangerous one — disconnecting — as the quiet alternative. */
+.network-prompt { max-width: 560px; }
+.network-prompt .modal-foot { align-items: center; flex-wrap: wrap; gap: 14px; }
+.network-prompt-actions { display: flex; align-items: center; gap: 9px; margin-left: auto; }

@@ -5,22 +5,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
-import {
-  Activity,
-  ArrowDownToLine,
-  Bell,
-  BookOpen,
-  ChevronDown,
-  Copy,
-  Database,
-  ExternalLink,
-  FileCheck2,
-  Layers3,
-  LogOut,
-  Menu,
-  Network,
-  WalletCards,
-} from "lucide-react";
+import { Activity, ArrowDownToLine, ArrowUpRight, Bell, BookOpen, ChevronDown, Copy, Database, ExternalLink, FileCheck2, Layers3, LogOut, Menu, Network, ShieldAlert, WalletCards } from "lucide-react";
 import { useReadContract } from "wagmi";
 import { PROOFRELAY_ADDRESS, PROOFRELAY_ADDRESS_IS_UNSET, proofRelayAbi } from "@/lib/contract";
 import { ACTIVE_CHAIN_ID, EXPLORER_URL, NETWORK_NAME } from "@/lib/wagmi";
@@ -137,6 +122,22 @@ export default function DashboardLayout({ children, eyebrow, title }: { children
   const apiNetwork = health.data?.network;
   const walletNetwork = chainName(wallet.chainId, wallet.chainId === apiChainId ? apiNetwork : null);
   const chainMismatch = wallet.isConnected && wallet.chainId !== undefined && apiChainId !== undefined && wallet.chainId !== apiChainId;
+  // The strip under the topbar was correct and easy to miss: a connected wallet
+  // on the wrong network read, on a busy page, as a connected wallet. The
+  // prompt is the same fact made unmissable — and it can only offer a switch
+  // when the API itself is on the chain this build signs against, which is the
+  // same guard the strip's action already uses.
+  const [promptDismissedFor, setPromptDismissedFor] = useState<number | null>(null);
+  const showNetworkPrompt = chainMismatch && apiChainId === ACTIVE_CHAIN_ID && wallet.chainId !== promptDismissedFor;
+  useEffect(() => { if (!wallet.isConnected) setPromptDismissedFor(null); }, [wallet.isConnected]);
+  const switchToActive = async () => {
+    try {
+      await wallet.switchNetwork();
+      toast.success(`Wallet switched to ${NETWORK_NAME}`);
+    } catch (error) {
+      toast.error("Network not switched", { description: writeErrorMessage(error, `The wallet refused to switch to ${NETWORK_NAME}.`) });
+    }
+  };
   const connection = connectionState(health.data, health.error);
   const indexedBlock = health.data?.indexer.lastBlock ?? null;
   const headBlock = health.data?.indexer.headBlock ?? null;
@@ -227,6 +228,7 @@ export default function DashboardLayout({ children, eyebrow, title }: { children
       <main className="main-content">
         <header className="topbar"><button className="mobile-menu icon-button" onClick={() => setMobileNav((current) => !current)} aria-label="Toggle navigation"><Menu size={20} /></button><div className="breadcrumb"><span>Workspace</span><span className="breadcrumb-slash">/</span><strong>{title}</strong></div><div className="topbar-actions"><div className="network-chip" title={chainMismatch ? `Wallet on ${walletNetwork}; API indexes ${apiNetwork ?? `chain ${apiChainId}`}` : dependencyDetail(health.data)}><span className={dotClass} />{chipLabel ?? <Skeleton width={68} height={9} />}</div><div className="topbar-anchor" data-menu-root><button className="icon-button notification-button" aria-label="Notifications" onClick={() => setMenu(menu === "signals" ? null : "signals")}><Bell size={17} />{openSignals > 0 && <span className="notification-badge">{openSignals}</span>}</button>{menu === "signals" && <div className="topbar-pop"><div className="topbar-pop-head"><span>Open signals</span><span>{signals.data ? openSignals : "…"}</span></div>{signals.error ? <p className="topbar-pop-note">{errorCode(signals.error)} — {errorMessage(signals.error)}</p> : !signals.data ? <div className="topbar-pop-list"><div className="signal-item"><span className="live-dot dot-idle" /><div><Skeleton width={112} height={9} /><Skeleton width={72} height={7} /></div></div></div> : openSignals === 0 ? <p className="topbar-pop-note">{signals.data.summary.openSignalDetail || "No dispute is open. Your task queue is clear."}</p> : <div className="topbar-pop-list">{disputeItems.map((event) => <div className="signal-item" key={event.id}><span className="live-dot dot-coral" /><div><strong>{event.title}</strong><small>{event.taskRef} · {event.time} UTC</small></div></div>)}</div>}<div className="topbar-pop-actions"><button onClick={() => go("/activity-log")}><Activity size={13} />Open activity log</button></div></div>}</div><div className="topbar-anchor" data-menu-root><button className={`wallet-button ${wallet.isConnected ? "connected" : ""}`} onClick={() => (wallet.isConnected ? setMenu(menu === "wallet" ? null : "wallet") : connect())}><WalletCards size={16} />{wallet.isConnected ? shortSigner ?? "Connected" : wallet.isConnecting ? "Connecting…" : wallet.isReconnecting ? "Reconnecting…" : "Connect wallet"}</button>{menu === "wallet" && walletMenu("topbar")}</div></div></header>
         {PROOFRELAY_ADDRESS_IS_UNSET && <NetworkBanner title="No contract address for this network" detail={`This build targets ${NETWORK_NAME} but VITE_PROOFRELAY_ADDRESS is not set, and the compiled-in fallback belongs to another chain. Every onchain read and write is inert until it is set.`} />}
+        {showNetworkPrompt && <div className="modal-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setPromptDismissedFor(wallet.chainId ?? null); }}><div className="modal-card network-prompt" role="alertdialog" aria-labelledby="network-prompt-title"><div className="modal-head"><div><span className="eyebrow">Wrong network</span><h2 id="network-prompt-title">Switch your wallet to {NETWORK_NAME}</h2></div><button className="icon-button" aria-label="Dismiss" onClick={() => setPromptDismissedFor(wallet.chainId ?? null)}>×</button></div><p className="modal-copy">Your wallet is on <strong>{walletNetwork}</strong>. ProofRelay's contract lives on {NETWORK_NAME} (chain {ACTIVE_CHAIN_ID}); a transaction signed on any other network never reaches it. If the wallet does not have {NETWORK_NAME} yet, it will offer to add it — switching signs nothing.</p><div className="modal-foot"><span className="modal-note"><ShieldAlert size={15} />Nothing on this page is signed until the wallet is on {NETWORK_NAME}</span><div className="network-prompt-actions"><button className="secondary-button" onClick={() => { void wallet.disconnect(); }}><LogOut size={15} />Disconnect</button><button className="primary-button" onClick={() => { void switchToActive(); }} disabled={wallet.isSwitchingNetwork}>{wallet.isSwitchingNetwork ? "Switching…" : `Switch to ${NETWORK_NAME}`} <ArrowUpRight size={16} /></button></div></div></div></div>}
         {chainMismatch && <NetworkBanner title={`Wallet is on ${walletNetwork}`} detail={`ProofRelay is indexed on ${apiNetwork ?? `chain ${apiChainId}`}. Nothing you sign here will reach the contract.`} actionLabel={apiChainId === ACTIVE_CHAIN_ID ? "Switch network" : undefined} onAction={apiChainId === ACTIVE_CHAIN_ID ? () => { void wallet.switchNetwork(); } : undefined} busy={wallet.isSwitchingNetwork} />}
         {health.error && <NetworkBanner title="ProofRelay API unreachable" detail={`${errorCode(health.error)} — ${errorMessage(health.error)}`} actionLabel="Retry" onAction={() => { void health.refetch(); }} busy={health.isFetching} />}
         {health.data?.paused && <NetworkBanner tone="ink" title="Contract paused" detail="Creating tasks, committing and opening challenges are blocked. Finalize, expire and withdraw still work." />}
