@@ -107,7 +107,7 @@ export default function VerifierNetwork() {
   // The same runner every other write path uses: the network's tip floor, the
   // receipt retry, and the revert-reason replay all live in one place so this page
   // cannot drift away from TaskDetail and VerificationTasks.
-  const { writeContractAsync, priorityFee, confirm: confirmTx } = useTxRunner();
+  const { writeContractAsync, feeOverrides, confirm: confirmTx } = useTxRunner();
 
   useEffect(() => {
     if (!menu) return;
@@ -153,7 +153,7 @@ export default function VerifierNetwork() {
     if (registerBlocker) { toast.error("Registration not sent", { description: registerBlocker }); return; }
     setBusy("register");
     try {
-      const hash = await writeContractAsync({ address: PROOFRELAY_ADDRESS, abi: proofRelayAbi, functionName: "registerVerifier", args: [form.metadataHash.trim() as Bytes32, form.metadataPointer.trim()], value: stakeWei(), chainId: ACTIVE_CHAIN_ID, maxPriorityFeePerGas: await priorityFee() });
+      const hash = await writeContractAsync({ address: PROOFRELAY_ADDRESS, abi: proofRelayAbi, functionName: "registerVerifier", args: [form.metadataHash.trim() as Bytes32, form.metadataPointer.trim()], value: stakeWei(), chainId: ACTIVE_CHAIN_ID, ...(await feeOverrides()) });
       toast("Registration submitted", { description: explorerTxUrl(hash) ?? hash });
       await confirmTx(hash);
       toast.success("Verifier registered onchain", { description: "You are registered but not yet approved. ProofRelay's MVP sybil defence is an admin allow-list: a DEFAULT_ADMIN holder must call setVerifierApproval(you, true) before the dispatcher can assign you a task. Until then the directory lists you as PENDING." });
@@ -177,7 +177,7 @@ export default function VerifierNetwork() {
     setMenu(null);
     setBusy("active");
     try {
-      const hash = await writeContractAsync({ address: PROOFRELAY_ADDRESS, abi: proofRelayAbi, functionName: "setVerifierActive", args: [next], chainId: ACTIVE_CHAIN_ID, maxPriorityFeePerGas: await priorityFee() });
+      const hash = await writeContractAsync({ address: PROOFRELAY_ADDRESS, abi: proofRelayAbi, functionName: "setVerifierActive", args: [next], chainId: ACTIVE_CHAIN_ID, ...(await feeOverrides()) });
       toast(next ? "Resuming verifier" : "Pausing verifier", { description: explorerTxUrl(hash) ?? hash });
       await confirmTx(hash);
       toast.success(next ? "Verifier active" : "Verifier paused", { description: `setVerifierActive(${next}) confirmed onchain.` });
@@ -199,7 +199,7 @@ export default function VerifierNetwork() {
     setMenu(null);
     setBusy("approval");
     try {
-      const hash = await writeContractAsync({ address: PROOFRELAY_ADDRESS, abi: proofRelayAbi, functionName: "setVerifierApproval", args: [current.address, next], chainId: ACTIVE_CHAIN_ID, maxPriorityFeePerGas: await priorityFee() });
+      const hash = await writeContractAsync({ address: PROOFRELAY_ADDRESS, abi: proofRelayAbi, functionName: "setVerifierApproval", args: [current.address, next], chainId: ACTIVE_CHAIN_ID, ...(await feeOverrides()) });
       toast(next ? "Approving verifier" : "Revoking approval", { description: explorerTxUrl(hash) ?? hash });
       await confirmTx(hash);
       toast.success(next ? "Verifier approved" : "Approval revoked", { description: `setVerifierApproval(${current.shortAddress}, ${next}) confirmed onchain.` });

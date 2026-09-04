@@ -8,6 +8,7 @@
     "build": "NODE_ENV=production vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "start": "NODE_ENV=production node dist/index.js",
     "preview": "vite preview --host",
+    "test": "vitest run client/src",
     "check": "tsc --noEmit",
     "format": "prettier --write .",
     "check:readability": "node scripts/check-readability.mjs"

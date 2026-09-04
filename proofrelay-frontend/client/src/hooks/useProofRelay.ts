@@ -18,6 +18,7 @@ import { waitForTransactionReceipt } from "wagmi/actions";
 import * as api from "@/lib/api";
 import { ApiError, isApiError } from "@/lib/api";
 import { PROOFRELAY_ADDRESS, proofRelayAbi } from "@/lib/contract";
+import { chainFeePair } from "@/lib/fees";
 import { ACTIVE_CHAIN_ID, MIN_PRIORITY_FEE_WEI, explorerTxUrl, wagmiConfig } from "@/lib/wagmi";
 import type {
   ActivityListResponse,
@@ -328,20 +329,6 @@ export interface TxOutcome {
   explorerUrl: string | null;
 }
 
-/**
- * Both 0G networks refuse a transaction whose tip is under their minimum with
- * "transaction gas price below minimum", so the node's own suggestion is only
- * ever used when it is higher than that floor.
- */
-async function chainPriorityFee(client: PublicClient | undefined): Promise<bigint> {
-  if (!client) return MIN_PRIORITY_FEE_WEI;
-  try {
-    const suggested = await client.estimateMaxPriorityFeePerGas();
-    return suggested > MIN_PRIORITY_FEE_WEI ? suggested : MIN_PRIORITY_FEE_WEI;
-  } catch {
-    return MIN_PRIORITY_FEE_WEI;
-  }
-}
 
 /**
  * A transaction that passed estimation and then reverted on execution carries no
@@ -390,7 +377,8 @@ export function useTxRunner() {
   const publicClient = usePublicClient({ chainId: ACTIVE_CHAIN_ID });
   const { writeContractAsync } = useWriteContract();
 
-  const priorityFee = useCallback(() => chainPriorityFee(publicClient), [publicClient]);
+  // Both EIP-1559 fields, so the wallet proposes a fee the node will accept (see lib/fees).
+  const feeOverrides = useCallback(() => chainFeePair(publicClient, MIN_PRIORITY_FEE_WEI), [publicClient]);
 
   /**
    * 0G answers eth_getTransactionReceipt with a not-found for a while after
@@ -407,7 +395,7 @@ export function useTxRunner() {
     [config, publicClient],
   );
 
-  return { writeContractAsync, priorityFee, confirm };
+  return { writeContractAsync, feeOverrides, confirm };
 }
 
 function outcome(hash: Hash, blockNumber: bigint): TxOutcome {
@@ -465,7 +453,7 @@ function assertPreparedMatchesInput(input: PrepareTaskRequest, prepared: Prepare
 }
 
 export function useCreateTask() {
-  const { writeContractAsync, priorityFee, confirm } = useTxRunner();
+  const { writeContractAsync, feeOverrides, confirm } = useTxRunner();
   const queryClient = useQueryClient();
   const { address } = useAccount();
 
@@ -488,7 +476,7 @@ export function useCreateTask() {
       // typed, before the wallet is asked for anything.
       assertPreparedMatchesInput(input, prepared);
       const args = prepared.createTaskArgs;
-      const maxPriorityFeePerGas = await priorityFee();
+      const fees = await feeOverrides();
 
       const hash = await writeContractAsync({
         address: PROOFRELAY_ADDRESS,
@@ -507,7 +495,7 @@ export function useCreateTask() {
         ],
         value: BigInt(args.valueWei),
         chainId: ACTIVE_CHAIN_ID,
-        maxPriorityFeePerGas,
+        ...fees,
       });
 
       const receipt = await confirm(hash);
@@ -548,7 +536,7 @@ export interface OpenChallengeResult extends TxOutcome {
 
 /** Challenge a consensus: the API pins the evidence artifact and prices the bond, the wallet posts it. */
 export function useOpenChallenge() {
-  const { writeContractAsync, priorityFee, confirm } = useTxRunner();
+  const { writeContractAsync, feeOverrides, confirm } = useTxRunner();
   const queryClient = useQueryClient();
   const { address } = useAccount();
 
@@ -559,7 +547,7 @@ export function useOpenChallenge() {
       if (!challenger) throw new Error("Connect a wallet before opening a challenge.");
 
       const prepared = await api.prepareChallenge(taskId, { ...body, challenger });
-      const maxPriorityFeePerGas = await priorityFee();
+      const fees = await feeOverrides();
 
       const hash = await writeContractAsync({
         address: PROOFRELAY_ADDRESS,
@@ -568,7 +556,7 @@ export function useOpenChallenge() {
         args: [taskId, prepared.evidenceHash, prepared.evidencePointer],
         value: BigInt(prepared.bondWei),
         chainId: ACTIVE_CHAIN_ID,
-        maxPriorityFeePerGas,
+        ...fees,
       });
 
       const receipt = await confirm(hash);
@@ -588,20 +576,20 @@ export interface ClaimRewardResult extends TxOutcome {
 
 /** claimReward(taskId) — moves an allocation into pendingWithdrawals, finalizing the task if it still needs it. */
 export function useClaimReward() {
-  const { writeContractAsync, priorityFee, confirm } = useTxRunner();
+  const { writeContractAsync, feeOverrides, confirm } = useTxRunner();
   const queryClient = useQueryClient();
 
   return useMutation<ClaimRewardResult, Error, Bytes32>({
     mutationKey: ["proofrelay", "claimReward"],
     mutationFn: async (taskId) => {
-      const maxPriorityFeePerGas = await priorityFee();
+      const fees = await feeOverrides();
       const hash = await writeContractAsync({
         address: PROOFRELAY_ADDRESS,
         abi: proofRelayAbi,
         functionName: "claimReward",
         args: [taskId],
         chainId: ACTIVE_CHAIN_ID,
-        maxPriorityFeePerGas,
+        ...fees,
       });
       const receipt = await confirm(hash);
       return { ...outcome(hash, receipt.blockNumber), taskId };
@@ -616,20 +604,20 @@ export function useClaimReward() {
 
 /** withdraw() — sweeps pendingWithdrawals(me) to the wallet. Allowed even while the contract is paused. */
 export function useWithdraw() {
-  const { writeContractAsync, priorityFee, confirm } = useTxRunner();
+  const { writeContractAsync, feeOverrides, confirm } = useTxRunner();
   const queryClient = useQueryClient();
 
   return useMutation<TxOutcome, Error, void>({
     mutationKey: ["proofrelay", "withdraw"],
     mutationFn: async () => {
-      const maxPriorityFeePerGas = await priorityFee();
+      const fees = await feeOverrides();
       const hash = await writeContractAsync({
         address: PROOFRELAY_ADDRESS,
         abi: proofRelayAbi,
         functionName: "withdraw",
         args: [],
         chainId: ACTIVE_CHAIN_ID,
-        maxPriorityFeePerGas,
+        ...fees,
       });
       const receipt = await confirm(hash);
       return outcome(hash, receipt.blockNumber);
