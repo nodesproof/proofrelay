@@ -555,10 +555,10 @@ button.signal-row:disabled { opacity: .72; }
 .flow-node { fill: #17232d; stroke: rgba(238,245,233,.24); stroke-width: 1.5; transition: fill 320ms ease, stroke 320ms ease; }
 .flow-node-group.lit .flow-node { fill: #c7f36b; stroke: #c7f36b; }
 .flow-node-group.waiting .flow-halo { animation: flow-wait 1.5s ease-in-out infinite; }
-.flow-label { fill: #a5b3ab; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; transition: fill 320ms ease; }
+.flow-label { fill: #a5b3ab; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; transition: fill 320ms ease; }
 .flow-node-group.lit .flow-label { fill: #eef5e9; }
-.flow-sub { fill: #7a8e85; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 8.5px; }
-.flow-lane { fill: #c7f36b; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; opacity: .85; }
+.flow-sub { fill: #8a988f; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+.flow-lane { fill: #c7f36b; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; opacity: .9; }
 .flow-pulse { fill: #c7f36b; filter: drop-shadow(0 0 6px #c7f36b); }
 @keyframes flow-wait { 0%, 100% { opacity: 0; r: 14px; } 50% { opacity: .8; r: 19px; } }
 @media (prefers-reduced-motion: reduce) { .flow-node-group.waiting .flow-halo { animation: none; opacity: .6; } .flow-edge-lit { transition: none; } }

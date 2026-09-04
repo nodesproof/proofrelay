@@ -16,7 +16,7 @@ const HOLD_MS = 2_400;
 /** Two events one second apart on a task that took five minutes would draw as one; keep every step readable. */
 const MIN_GAP = 0.09;
 
-const X = { creator: 52, storage: 150, commit: 262, reveal: 340, consensus: 426, settled: 492 };
+const X = { creator: 54, storage: 160, commit: 272, reveal: 358, consensus: 456, settled: 530 };
 const Y = { mid: 142, lanes: [88, 196] };
 
 function stamp(iso: string | null | undefined): number | null {
@@ -133,13 +133,13 @@ export default function EvidenceFlow({ task, pending }: { task: TaskDetail | nul
         <circle className="flow-halo" cx={x} cy={y} r={18} />
         <circle className="flow-node" cx={x} cy={y} r={11} />
         <text className="flow-label" x={x} y={y + 27} textAnchor="middle">{label}</text>
-        {sub && <text className="flow-sub" x={x} y={y + 39} textAnchor="middle">{sub}</text>}
+        {sub && <text className="flow-sub" x={x} y={y + 41} textAnchor="middle">{sub}</text>}
       </g>
     );
   };
 
   return (
-    <svg className={`evidence-flow ${pending ? "is-pending" : ""}`} viewBox="0 0 520 300" preserveAspectRatio="xMidYMid meet" role="img"
+    <svg className={`evidence-flow ${pending ? "is-pending" : ""}`} viewBox="0 0 570 300" preserveAspectRatio="xMidYMid meet" role="img"
       aria-label={task ? `${task.ref}: the task's events replayed in the order the chain recorded them` : "Evidence flow"}>
       {edges.map((edge, i) => {
         const p = along(cursor, plan.u.get(edge.from), plan.u.get(edge.to));
