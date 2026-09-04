@@ -118,7 +118,7 @@ workers/
   adjudicator/      second-pass review of a challenged task
 proofrelay-frontend/  the Evidence Ledger web UI
 infra/              docker-compose, Dockerfiles, migrations
-docs/               PRD, architecture, deployment, runbook, threat model
+docs/               architecture, deployment, runbook, threat model, verification
 ```
 
 ## Running only a verifier
