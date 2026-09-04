@@ -488,7 +488,6 @@ proofrelay/
 │   ├── docker-compose.yml
 │   └── migrations/
 ├── docs/
-│   ├── PRD.md
 │   ├── ARCHITECTURE.md
 │   └── threat-model.md
 └── README.md

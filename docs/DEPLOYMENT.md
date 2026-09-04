@@ -214,7 +214,7 @@ prints its resolved chain and contract on startup, and `/health` reports both.
 
 ## Step 3 — approve the verifiers
 
-The MVP uses an admin allow-list as the sybil mitigation (PRD §15). A verifier
+The MVP uses an admin allow-list as the sybil mitigation. A verifier
 must self-register *and* be approved before it can commit.
 
 ```bash
