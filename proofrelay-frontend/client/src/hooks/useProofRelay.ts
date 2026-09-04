@@ -19,6 +19,7 @@ import * as api from "@/lib/api";
 import { ApiError, isApiError } from "@/lib/api";
 import { PROOFRELAY_ADDRESS, proofRelayAbi } from "@/lib/contract";
 import { chainFeePair } from "@/lib/fees";
+import { preflightWrite, type WriteRequest } from "@/lib/preflight";
 import { ACTIVE_CHAIN_ID, MIN_PRIORITY_FEE_WEI, explorerTxUrl, wagmiConfig } from "@/lib/wagmi";
 import type {
   ActivityListResponse,
@@ -376,9 +377,13 @@ export function useTxRunner() {
   const config = useConfig();
   const publicClient = usePublicClient({ chainId: ACTIVE_CHAIN_ID });
   const { writeContractAsync } = useWriteContract();
+  const { address: account } = useAccount();
 
   // Both EIP-1559 fields, so the wallet proposes a fee the node will accept (see lib/fees).
   const feeOverrides = useCallback(() => chainFeePair(publicClient, MIN_PRIORITY_FEE_WEI), [publicClient]);
+  // Simulate as the connected account and get a bounded gas limit, or throw
+  // before the wallet is asked for anything (see lib/preflight for why).
+  const preflight = useCallback((request: WriteRequest) => preflightWrite(publicClient, account, request), [publicClient, account]);
 
   /**
    * 0G answers eth_getTransactionReceipt with a not-found for a while after
@@ -395,7 +400,7 @@ export function useTxRunner() {
     [config, publicClient],
   );
 
-  return { writeContractAsync, feeOverrides, confirm };
+  return { writeContractAsync, feeOverrides, preflight, confirm };
 }
 
 function outcome(hash: Hash, blockNumber: bigint): TxOutcome {
@@ -453,7 +458,7 @@ function assertPreparedMatchesInput(input: PrepareTaskRequest, prepared: Prepare
 }
 
 export function useCreateTask() {
-  const { writeContractAsync, feeOverrides, confirm } = useTxRunner();
+  const { writeContractAsync, feeOverrides, preflight, confirm } = useTxRunner();
   const queryClient = useQueryClient();
   const { address } = useAccount();
 
@@ -476,9 +481,7 @@ export function useCreateTask() {
       // typed, before the wallet is asked for anything.
       assertPreparedMatchesInput(input, prepared);
       const args = prepared.createTaskArgs;
-      const fees = await feeOverrides();
-
-      const hash = await writeContractAsync({
+      const request = {
         address: PROOFRELAY_ADDRESS,
         abi: proofRelayAbi,
         functionName: "createTask",
@@ -494,9 +497,9 @@ export function useCreateTask() {
           },
         ],
         value: BigInt(args.valueWei),
-        chainId: ACTIVE_CHAIN_ID,
-        ...fees,
-      });
+      } as const;
+      const [fees, gas] = await Promise.all([feeOverrides(), preflight(request)]);
+      const hash = await writeContractAsync({ ...request, chainId: ACTIVE_CHAIN_ID, ...fees, gas });
 
       const receipt = await confirm(hash);
       const events = parseEventLogs({ abi: proofRelayAbi, eventName: "TaskCreated", logs: receipt.logs });
@@ -536,7 +539,7 @@ export interface OpenChallengeResult extends TxOutcome {
 
 /** Challenge a consensus: the API pins the evidence artifact and prices the bond, the wallet posts it. */
 export function useOpenChallenge() {
-  const { writeContractAsync, feeOverrides, confirm } = useTxRunner();
+  const { writeContractAsync, feeOverrides, preflight, confirm } = useTxRunner();
   const queryClient = useQueryClient();
   const { address } = useAccount();
 
@@ -547,17 +550,15 @@ export function useOpenChallenge() {
       if (!challenger) throw new Error("Connect a wallet before opening a challenge.");
 
       const prepared = await api.prepareChallenge(taskId, { ...body, challenger });
-      const fees = await feeOverrides();
-
-      const hash = await writeContractAsync({
+      const request = {
         address: PROOFRELAY_ADDRESS,
         abi: proofRelayAbi,
         functionName: "openChallenge",
         args: [taskId, prepared.evidenceHash, prepared.evidencePointer],
         value: BigInt(prepared.bondWei),
-        chainId: ACTIVE_CHAIN_ID,
-        ...fees,
-      });
+      } as const;
+      const [fees, gas] = await Promise.all([feeOverrides(), preflight(request)]);
+      const hash = await writeContractAsync({ ...request, chainId: ACTIVE_CHAIN_ID, ...fees, gas });
 
       const receipt = await confirm(hash);
       return { ...outcome(hash, receipt.blockNumber), taskId, bondWei: prepared.bondWei, evidenceHash: prepared.evidenceHash, evidencePointer: prepared.evidencePointer };
@@ -576,21 +577,15 @@ export interface ClaimRewardResult extends TxOutcome {
 
 /** claimReward(taskId) — moves an allocation into pendingWithdrawals, finalizing the task if it still needs it. */
 export function useClaimReward() {
-  const { writeContractAsync, feeOverrides, confirm } = useTxRunner();
+  const { writeContractAsync, feeOverrides, preflight, confirm } = useTxRunner();
   const queryClient = useQueryClient();
 
   return useMutation<ClaimRewardResult, Error, Bytes32>({
     mutationKey: ["proofrelay", "claimReward"],
     mutationFn: async (taskId) => {
-      const fees = await feeOverrides();
-      const hash = await writeContractAsync({
-        address: PROOFRELAY_ADDRESS,
-        abi: proofRelayAbi,
-        functionName: "claimReward",
-        args: [taskId],
-        chainId: ACTIVE_CHAIN_ID,
-        ...fees,
-      });
+      const request = { address: PROOFRELAY_ADDRESS, abi: proofRelayAbi, functionName: "claimReward", args: [taskId] } as const;
+      const [fees, gas] = await Promise.all([feeOverrides(), preflight(request)]);
+      const hash = await writeContractAsync({ ...request, chainId: ACTIVE_CHAIN_ID, ...fees, gas });
       const receipt = await confirm(hash);
       return { ...outcome(hash, receipt.blockNumber), taskId };
     },
@@ -604,21 +599,15 @@ export function useClaimReward() {
 
 /** withdraw() — sweeps pendingWithdrawals(me) to the wallet. Allowed even while the contract is paused. */
 export function useWithdraw() {
-  const { writeContractAsync, feeOverrides, confirm } = useTxRunner();
+  const { writeContractAsync, feeOverrides, preflight, confirm } = useTxRunner();
   const queryClient = useQueryClient();
 
   return useMutation<TxOutcome, Error, void>({
     mutationKey: ["proofrelay", "withdraw"],
     mutationFn: async () => {
-      const fees = await feeOverrides();
-      const hash = await writeContractAsync({
-        address: PROOFRELAY_ADDRESS,
-        abi: proofRelayAbi,
-        functionName: "withdraw",
-        args: [],
-        chainId: ACTIVE_CHAIN_ID,
-        ...fees,
-      });
+      const request = { address: PROOFRELAY_ADDRESS, abi: proofRelayAbi, functionName: "withdraw", args: [] } as const;
+      const [fees, gas] = await Promise.all([feeOverrides(), preflight(request)]);
+      const hash = await writeContractAsync({ ...request, chainId: ACTIVE_CHAIN_ID, ...fees, gas });
       const receipt = await confirm(hash);
       return outcome(hash, receipt.blockNumber);
     },
