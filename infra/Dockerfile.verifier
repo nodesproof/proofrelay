@@ -1,0 +1,36 @@
+# A verifier and nothing else.
+#
+# infra/Dockerfile builds one image for the API and every worker, which is right
+# for the operator running the whole stack and wrong for anyone else: a third
+# party who wants to run a verifier should not be shipping Fastify, a Postgres
+# client and the web app's dependency tree, and should not be handed a
+# container that expects the operator's .env. This image carries the shared
+# packages and workers/verifier, installs only their dependencies, and reads
+# only a verifier's configuration — see .env.verifier-standalone.example.
+FROM node:22-bookworm-slim AS build
+WORKDIR /app
+COPY package.json package-lock.json* tsconfig.base.json tsconfig.build.json ./
+COPY packages ./packages
+COPY workers/verifier ./workers/verifier
+# The lockfile is the monorepo's; -w scopes the install to this workspace and
+# the workspace packages it depends on. apps/ is simply not here to resolve.
+RUN npm ci --no-audit --no-fund -w workers/verifier --include-workspace-root
+# --force: build every referenced project regardless of what any incremental
+# state claims. The context excludes tsbuildinfo now, but an image build must
+# not depend on what the host happened to leave behind.
+RUN npx tsc -b workers/verifier --force
+
+FROM node:22-bookworm-slim
+WORKDIR /app
+ENV NODE_ENV=production
+COPY package.json package-lock.json* ./
+COPY --from=build /app/packages ./packages
+COPY --from=build /app/workers/verifier ./workers/verifier
+RUN npm ci --omit=dev --no-audit --no-fund -w workers/verifier --include-workspace-root \
+ && rm -rf /root/.npm
+
+# The commit journal. A verifier that loses it cannot reveal what it already
+# committed to, so mount it — compose does — rather than leave it in the layer.
+RUN mkdir -p /app/.proofrelay
+VOLUME ["/app/.proofrelay"]
+CMD ["node", "workers/verifier/dist/main.js"]

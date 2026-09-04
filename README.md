@@ -114,12 +114,22 @@ packages/
   config/           env loading with the precedence the deployment doc documents
 apps/api/           HTTP API, chain indexer, orchestrator, keeper
 workers/
-  verifier/         builds reports, commits, reveals
+  verifier/         builds reports, commits, reveals — its own layer; see below
   adjudicator/      second-pass review of a challenged task
 proofrelay-frontend/  the Evidence Ledger web UI
 infra/              docker-compose, Dockerfiles, migrations
 docs/               PRD, architecture, deployment, runbook, threat model
 ```
+
+## Running only a verifier
+
+The verifier is a layer, not just a directory: it reads the contract, 0G
+Storage and 0G Compute directly and never the API or its database — a boundary
+`workers/architecture.test.ts` fails the build on. So a third party can run
+one without the rest of this stack, from
+[`infra/Dockerfile.verifier`](infra/Dockerfile.verifier) and a configuration
+that holds nothing but a verifier's own keys. See
+[`docs/VERIFIER_OPERATOR.md`](docs/VERIFIER_OPERATOR.md).
 
 ## How integrity actually works
 

@@ -1,0 +1,20 @@
+# One verifier, run by someone who is not the deployment's operator.
+#
+#   cp .env.verifier-standalone.example .env      # fill it in
+#   docker compose -f infra/docker-compose.verifier.yml up --build
+#
+# No API, no database, no web app: the verifier reads the contract, 0G Storage
+# and 0G Compute directly, and the only file it reads is the .env in the repo
+# root next to this compose file's context.
+services:
+  verifier:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.verifier
+    env_file: [../.env]
+    volumes:
+      - verifier-journal:/app/.proofrelay
+    restart: unless-stopped
+
+volumes:
+  verifier-journal:

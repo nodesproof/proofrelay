@@ -8,3 +8,7 @@ contracts/out
 contracts/cache
 contracts/broadcast
 *.log
+# tsc -b incremental state from the host. Copied into an image it makes every
+# project look up to date, and tsc then emits nothing — dist/ is excluded above,
+# so the image ends up with sources, no output, and a container that cannot start.
+**/*.tsbuildinfo

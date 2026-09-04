@@ -1,7 +1,6 @@
 import { join } from "node:path";
 import {
   assertContractConfigured,
-  assertIndexerStartBlock,
   describeConfig,
   loadConfig,
   verifierProfile,
@@ -14,7 +13,10 @@ import { DEFAULT_MIN_COLLECT_WEI, VerifierWorker } from "./worker.js";
 
 const config = loadConfig();
 assertContractConfigured(config);
-assertIndexerStartBlock(config);
+// Not assertIndexerStartBlock: that guards the API's indexer against scanning
+// from genesis. A verifier never indexes — it scans back from the head — so
+// demanding the deploy block here only made a standalone operator look up a
+// number nothing in this process reads.
 
 const profile = verifierProfile();
 
@@ -31,9 +33,17 @@ const chain = new ChainClient({
   confirmations: 1,
 });
 
+// A verifier is already an onchain identity, so it pays for its own uploads:
+// the report body it reveals goes to 0G Storage on its own key unless the
+// operator points STORAGE_PRIVATE_KEY at a dedicated one. Before this, every
+// verifier signed with the deployment's shared storage key — which meant a
+// machine running only a verifier had to hold a key that was not its own.
+const storageKey = config.storage.privateKey ?? profile.privateKey;
+log("info", "storage uploads signed by", { key: config.storage.privateKey ? "STORAGE_PRIVATE_KEY" : "the verifier's own key" });
+
 const worker = new VerifierWorker({
   chain,
-  storage: createStorageAdapter(config.storage),
+  storage: createStorageAdapter({ ...config.storage, privateKey: storageKey }),
   compute: createComputeAdapter(config.compute, {
     evidenceDepth: profile.evidenceDepth,
     supportThreshold: profile.supportThreshold,

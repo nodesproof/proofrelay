@@ -355,6 +355,15 @@ dev server exposes source and an HMR socket, and its port floats when the
 configured one is busy — which is exactly what a tunnel or reverse proxy in
 front of it cannot tolerate.
 
+### A verifier on someone else's machine
+
+Everything above is the operator's stack. An independent verifier needs none of
+it — no API, no database, no `.env` of yours — and gets its own image
+(`infra/Dockerfile.verifier`), its own compose file
+(`infra/docker-compose.verifier.yml`) and its own configuration template
+(`.env.verifier-standalone.example`). The operator's guide is
+[`VERIFIER_OPERATOR.md`](VERIFIER_OPERATOR.md).
+
 ## Step 6 — verify the deployment
 
 ```bash

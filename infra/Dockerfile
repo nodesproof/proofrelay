@@ -8,7 +8,10 @@ COPY packages ./packages
 COPY apps ./apps
 COPY workers ./workers
 RUN npm ci --no-audit --no-fund
-RUN npx tsc -b tsconfig.build.json
+# --force, for the same reason as Dockerfile.verifier: any incremental state that
+# reaches the context would make every project look up to date and tsc would
+# emit nothing. The context now excludes it; the build must not depend on that.
+RUN npx tsc -b tsconfig.build.json --force
 
 FROM node:22-bookworm-slim
 WORKDIR /app
