@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { boundedGas, describeRevert } from "./preflight";
+import { boundedGas, describeRevert, revertNameFrom } from "./preflight";
 
 describe("boundedGas", () => {
   it("adds a fifth to the estimate and rounds down", () => {
@@ -19,6 +19,22 @@ describe("describeRevert", () => {
   it("still names an error it has no sentence for", () => {
     expect(describeRevert("SomethingNew", "openChallenge")).toBe("The contract would reject openChallenge (SomethingNew). Nothing was sent.");
     expect(describeRevert(undefined, "withdraw")).toBe("The contract would reject withdraw. Nothing was sent.");
+  });
+});
+
+describe("revertNameFrom", () => {
+  it("finds the decoded error name however deep viem wrapped it, without instanceof", () => {
+    const wrapped = { name: "ContractFunctionExecutionError", cause: { name: "ContractFunctionRevertedError", data: { errorName: "NothingToClaim" } } };
+    expect(revertNameFrom(wrapped)).toBe("NothingToClaim");
+  });
+  it("falls back to the reason line viem prints when no data was decoded", () => {
+    const bare = { name: "ContractFunctionRevertedError", reason: "InvalidStatus()" };
+    expect(revertNameFrom(bare)).toBe("InvalidStatus");
+    const messageOnly = { message: 'The contract function "claimReward" reverted with the following reason:\nInvalidStatus()\n\nContract Call:' };
+    expect(revertNameFrom(messageOnly)).toBe("InvalidStatus");
+  });
+  it("gives nothing for an error that is not a revert", () => {
+    expect(revertNameFrom(new Error("fetch failed"))).toBeUndefined();
   });
 });
 

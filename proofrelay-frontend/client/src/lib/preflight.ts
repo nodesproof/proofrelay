@@ -1,4 +1,4 @@
-import { BaseError, ContractFunctionRevertedError, type Abi, type Address, type PublicClient } from "viem";
+import type { Abi, Address, PublicClient } from "viem";
 
 /**
  * What every wallet write goes through before the wallet sees it.
@@ -67,10 +67,32 @@ export function describeRevert(errorName: string | undefined, functionName: stri
   return `The contract would reject ${functionName}. Nothing was sent.`;
 }
 
-function revertName(error: unknown): string | undefined {
-  if (!(error instanceof BaseError)) return undefined;
-  const revert = error.walk((e) => e instanceof ContractFunctionRevertedError) as ContractFunctionRevertedError | null;
-  return revert?.data?.errorName ?? revert?.signature ?? undefined;
+/**
+ * Finds the contract error in a viem error, whatever wrapped it. Deliberately
+ * duck-typed: the wallet stack can carry more than one copy of viem, and an
+ * instanceof against the wrong copy is how a decoded error name goes missing
+ * and a user is shown "reverted with the following reason:" and nothing else.
+ */
+export function revertNameFrom(error: unknown): string | undefined {
+  let cursor: unknown = error;
+  for (let depth = 0; cursor && typeof cursor === "object" && depth < 12; depth += 1) {
+    const shell = cursor as { name?: string; data?: { errorName?: string }; signature?: string; reason?: string; cause?: unknown; message?: string };
+    if (shell.data?.errorName) return shell.data.errorName;
+    if (shell.name === "ContractFunctionRevertedError") {
+      const named = shell.reason?.match(/^([A-Za-z_]\w*)\(/)?.[1];
+      return named ?? shell.signature ?? shell.reason ?? undefined;
+    }
+    cursor = shell.cause;
+  }
+  const fromMessage = (error as { message?: string } | null)?.message?.match(/reverted with the following reason:\s*\n\s*([A-Za-z_]\w*)\(/);
+  return fromMessage?.[1];
+}
+
+/** First line of whatever viem or the RPC said — reasons are multi-line and a toast shows one. */
+function oneLine(error: unknown): string {
+  const shell = error as { shortMessage?: string; details?: string; message?: string } | null;
+  const text = shell?.details || shell?.shortMessage || shell?.message || String(error);
+  return text.replace(/\s+/g, " ").trim();
 }
 
 /**
@@ -93,15 +115,13 @@ export async function preflightWrite(client: PublicClient | undefined, account: 
   try {
     await client.simulateContract(call);
   } catch (error) {
-    const name = revertName(error);
-    if (name || error instanceof ContractFunctionRevertedError) throw new PreflightError(describeRevert(name, request.functionName), name);
-    const detail = error instanceof BaseError ? error.shortMessage : error instanceof Error ? error.message : String(error);
-    throw new PreflightError(`Could not simulate ${request.functionName}: ${detail}. Nothing was sent.`);
+    const name = revertNameFrom(error);
+    if (name || /reverted/i.test(oneLine(error))) throw new PreflightError(describeRevert(name, request.functionName), name);
+    throw new PreflightError(`Could not simulate ${request.functionName}: ${oneLine(error)}. Nothing was sent.`);
   }
   try {
     return boundedGas(await client.estimateContractGas(call));
   } catch (error) {
-    const detail = error instanceof BaseError ? error.shortMessage : error instanceof Error ? error.message : String(error);
-    throw new PreflightError(`Could not estimate gas for ${request.functionName}: ${detail}. Nothing was sent.`);
+    throw new PreflightError(`Could not estimate gas for ${request.functionName}: ${oneLine(error)}. Nothing was sent.`);
   }
 }
