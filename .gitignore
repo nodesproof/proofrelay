@@ -30,8 +30,16 @@ backups/
 # Raw screen recordings and scratch images
 *.mkv
 ChatGPT Image*.png
+# The favicon source. Its cleaned master lives at
+# proofrelay-frontend/client/public/proofrelay-icon.png, which is versioned —
+# this is the raw capture it was cut from.
+Screenshot from *.png
 
 # Hackathon submission text — kept locally, never published with the code.
 docs/SUBMISSION.md
 docs/demo/walkthrough-listing.md
 docs/PRD.md
+# PMF is the same class: it names our own weakest numbers and ends with
+# "what will lose us points". This repo is public.
+docs/PMF.md
+docs/PMF.id.md
