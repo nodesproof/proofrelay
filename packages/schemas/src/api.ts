@@ -368,6 +368,10 @@ export const VerifierListResponse = z.object({
       taskId: hex32.nullable(),
       at: z.string(),
       tone: ToneSchema,
+      // The same TxRef `/v1/activity` carries. taskId is null on every registry
+      // event — approvals and registrations belong to no task — so the
+      // transaction is the only target this feed can offer on all of its rows.
+      tx: TxRef,
     }),
   ),
 });

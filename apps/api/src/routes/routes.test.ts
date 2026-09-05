@@ -592,6 +592,14 @@ describeDb("routes against the read model", () => {
     expect(body.summary.slashingEnabled).toBe(true);
     expect(body.summary.networkAgreementPct).toBe(100);
     expect(body.events.length).toBeGreaterThan(0);
+    // Every row in this feed opens its transaction, and a registry event has no
+    // taskId to fall back on, so the tx is the one field that must never be
+    // absent. chain_events.tx_hash is NOT NULL, so a null here is a bug in the
+    // query or the mapper rather than missing data.
+    for (const event of body.events) {
+      expect(event.tx.txHash).toBeTruthy();
+      expect(event.tx.explorerUrl).toContain(event.tx.txHash);
+    }
   });
 
   it("returns the artifact index with real aggregates", async () => {

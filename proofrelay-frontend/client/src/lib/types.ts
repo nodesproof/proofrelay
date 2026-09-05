@@ -381,6 +381,7 @@ export interface VerifierEvent {
   taskId: Bytes32 | null;
   at: Iso;
   tone: Tone;
+  tx: TxRef;
 }
 
 export interface VerifierListResponse {

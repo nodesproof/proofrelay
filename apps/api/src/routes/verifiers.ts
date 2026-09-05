@@ -33,6 +33,7 @@ import {
   type VerifierListResponse as VerifierListResponseType,
   type VerifierView,
 } from "@proofrelay/schemas";
+import { txUrl } from "@proofrelay/chain-client";
 import type { RouteContext } from "../app.js";
 import { many, one } from "../db.js";
 import { refForSequence } from "../services/refs.js";
@@ -152,6 +153,11 @@ interface EventRow {
   block_time: Date;
   sequence: number | null;
   label: string | null;
+  // Both NOT NULL in chain_events, so every row this feed renders has a
+  // transaction to open. block_number arrives as a string: node-postgres hands
+  // back BIGINT as text rather than silently losing precision past 2^53.
+  tx_hash: string;
+  block_number: string;
 }
 
 const EVENT_LABELS: Record<string, { label: string; tone: DisplayTone }> = {
@@ -376,6 +382,13 @@ export async function registerVerifierRoutes(
           taskId: (event.task_id as `0x${string}` | null) ?? null,
           at: event.block_time.toISOString(),
           tone: mapped.tone,
+          // The same TxRef `/v1/activity` returns, built by the same helper, so
+          // the two feeds cannot drift to different explorer URLs for one event.
+          tx: {
+            txHash: event.tx_hash,
+            blockNumber: Number(event.block_number),
+            explorerUrl: txUrl(ctx.config.chain.chainId, event.tx_hash),
+          },
         };
       }),
     };
@@ -418,7 +431,8 @@ function seriesFor(rows: BucketRow[]): number[] {
 async function recentEvents(ctx: RouteContext): Promise<EventRow[]> {
   return many<EventRow>(
     ctx.pool,
-    `SELECT e.event_name, e.actor, e.task_id, e.block_time, t.sequence, v.label
+    `SELECT e.event_name, e.actor, e.task_id, e.block_time, e.tx_hash, e.block_number,
+            t.sequence, v.label
        FROM chain_events e
        LEFT JOIN tasks     t ON t.task_id = e.task_id
        LEFT JOIN verifiers v ON lower(v.address) = lower(e.actor)
