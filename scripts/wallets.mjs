@@ -16,6 +16,8 @@ const ROLES = [
   ["ADJUDICATOR_PRIVATE_KEY", "ADJUDICATOR_ADDRESS", "adjudicator — resolveDispute only"],
   ["VERIFIER_A_PRIVATE_KEY", "VERIFIER_A_ADDRESS", "verifier A"],
   ["VERIFIER_B_PRIVATE_KEY", "VERIFIER_B_ADDRESS", "verifier B"],
+  ["VERIFIER_C_PRIVATE_KEY", "VERIFIER_C_ADDRESS", "verifier C"],
+  ["VERIFIER_D_PRIVATE_KEY", "VERIFIER_D_ADDRESS", "verifier D"],
   ["STORAGE_PRIVATE_KEY", "STORAGE_ADDRESS", "0G Storage fees — signs an upload on every accepted prepare"],
   ["CREATOR_PRIVATE_KEY", "CREATOR_ADDRESS", "demo task creator (npm run demo)"],
 ];

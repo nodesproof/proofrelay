@@ -1,14 +1,16 @@
 /**
  * PM2 process definitions for the whole ProofRelay stack.
  *
- *   pm2 start ecosystem.config.cjs      # all five services
+ *   pm2 start ecosystem.config.cjs      # all seven services
  *   pm2 save                            # survive a reboot (see docs/DEPLOYMENT.md)
  *
  * WHAT RUNS HERE, and why each one is not optional for an end-to-end run:
  *   api          HTTP API + chain indexer + keeper. Without it nothing is
  *                indexed and finalizeConsensus is never called.
- *   verifier-a   The two independent verifiers. A task with no verifier
- *   verifier-b   committing simply expires.
+ *   verifier-a   The four independent verifiers. A task with no verifier
+ *   verifier-b   committing simply expires, and consensus needs two of them to
+ *   verifier-c   agree. A and B run the router default model; C and D pin a
+ *   verifier-d   different one each in their own .env.verifier-<x>.
  *   adjudicator  Second-pass review of a challenged task.
  *   web          The Evidence Ledger UI, served as a static build by
  *                proofrelay-frontend/server — NOT the Vite dev server. A dev
@@ -75,6 +77,8 @@ module.exports = {
     service("api", "apps/api/dist/server.js"),
     service("verifier-a", "workers/verifier/dist/main.js", { VERIFIER_PROFILE: "a" }),
     service("verifier-b", "workers/verifier/dist/main.js", { VERIFIER_PROFILE: "b" }),
+    service("verifier-c", "workers/verifier/dist/main.js", { VERIFIER_PROFILE: "c" }),
+    service("verifier-d", "workers/verifier/dist/main.js", { VERIFIER_PROFILE: "d" }),
     service("adjudicator", "workers/adjudicator/dist/main.js"),
     service("web", "proofrelay-frontend/dist/index.js", {
       PORT: webPort,

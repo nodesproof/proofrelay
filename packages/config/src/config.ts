@@ -304,11 +304,15 @@ export function verifierProfile(profile = env("VERIFIER_PROFILE") ?? "a"): Verif
   const privateKey = asHex(requireEnv(`VERIFIER_${key}_PRIVATE_KEY`));
   if (!privateKey) throw new Error(`VERIFIER_${key}_PRIVATE_KEY is not set`);
 
-  // Two deliberately different pipelines, so agreement means two configurations
-  // reached the same verdict rather than one pipeline run twice.
+  // Deliberately different pipelines, so agreement means independent
+  // configurations reached the same verdict rather than one pipeline run four
+  // times. No two profiles share a (depth, threshold) pair, and C and D also
+  // run a different model — see COMPUTE_MODEL in their .env.verifier-<x>.
   const presets: Record<string, { evidenceDepth: number; supportThreshold: number }> = {
     A: { evidenceDepth: 2, supportThreshold: 0.55 },
     B: { evidenceDepth: 3, supportThreshold: 0.5 },
+    C: { evidenceDepth: 3, supportThreshold: 0.6 },
+    D: { evidenceDepth: 2, supportThreshold: 0.48 },
   };
   const preset = presets[key] ?? { evidenceDepth: 2, supportThreshold: 0.55 };
 

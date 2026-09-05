@@ -90,6 +90,36 @@ services:
       api: { condition: service_healthy }
     restart: unless-stopped
 
+  verifier-c:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    command: ["node", "workers/verifier/dist/main.js"]
+    environment:
+      VERIFIER_PROFILE: c
+      DATABASE_URL: postgres://proofrelay:${POSTGRES_PASSWORD}@postgres:5432/proofrelay
+    env_file: [../.env]
+    volumes:
+      - proofrelay-storage:/app/.proofrelay
+    depends_on:
+      api: { condition: service_healthy }
+    restart: unless-stopped
+
+  verifier-d:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    command: ["node", "workers/verifier/dist/main.js"]
+    environment:
+      VERIFIER_PROFILE: d
+      DATABASE_URL: postgres://proofrelay:${POSTGRES_PASSWORD}@postgres:5432/proofrelay
+    env_file: [../.env]
+    volumes:
+      - proofrelay-storage:/app/.proofrelay
+    depends_on:
+      api: { condition: service_healthy }
+    restart: unless-stopped
+
   adjudicator:
     build:
       context: ..

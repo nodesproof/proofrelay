@@ -2,8 +2,8 @@
 /**
  * Spreads gas from the funded operator to the role wallets.
  *
- * The faucet drips per address, so funding five roles directly would take five
- * days. Only the operator needs the faucet; this tops the rest up to a floor,
+ * The faucet drips per address, so funding the roles directly would take a day
+ * each. Only the operator needs the faucet; this tops the rest up to a floor,
  * and skips any address that is already above it.
  */
 import { createPublicClient, createWalletClient, formatEther, http, parseEther, parseGwei } from "viem";
@@ -31,7 +31,7 @@ const wallet = createWalletClient({ account: operator, chain, transport });
  *
  *   keeper       0.00078 per task        FUND_KEEPER
  *   adjudicator  0.0007 per dispute      FUND_ADJUDICATOR
- *   verifier     0.0014 per task         FUND_VERIFIER_A / FUND_VERIFIER_B
+ *   verifier     0.0014 per task         FUND_VERIFIER_A … FUND_VERIFIER_D
  *   creator      0.001 per task + bounty FUND_CREATOR
  *   storage      0.001182 per object,    FUND_STORAGE
  *                up to 21 per prepare
@@ -43,6 +43,8 @@ const TARGETS = [
   ["ADJUDICATOR_ADDRESS", target("FUND_ADJUDICATOR", "0.005")],
   ["VERIFIER_A_ADDRESS", target("FUND_VERIFIER_A", "0.01")],
   ["VERIFIER_B_ADDRESS", target("FUND_VERIFIER_B", "0.01")],
+  ["VERIFIER_C_ADDRESS", target("FUND_VERIFIER_C", "0.01")],
+  ["VERIFIER_D_ADDRESS", target("FUND_VERIFIER_D", "0.01")],
   ["CREATOR_ADDRESS", target("FUND_CREATOR", "0.02")],
   // Higher than the rest on purpose: this key pays a fee per stored object on
   // top of gas, and one accepted prepare writes up to 21 of them.

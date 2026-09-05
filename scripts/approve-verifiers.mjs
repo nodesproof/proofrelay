@@ -44,7 +44,13 @@ for (const [name, role] of [
   console.log(`  + ${name.padEnd(20)} ${address} granted  ${receipt.txHash}`);
 }
 
-for (const name of ["VERIFIER_A_ADDRESS", "VERIFIER_B_ADDRESS", ...(env("VERIFIER_ADDRESS") ? ["VERIFIER_ADDRESS"] : [])]) {
+for (const name of [
+  "VERIFIER_A_ADDRESS",
+  "VERIFIER_B_ADDRESS",
+  "VERIFIER_C_ADDRESS",
+  "VERIFIER_D_ADDRESS",
+  ...(env("VERIFIER_ADDRESS") ? ["VERIFIER_ADDRESS"] : []),
+]) {
   const address = env(name);
   if (!address) continue;
   const record = await chain.getVerifier(address);

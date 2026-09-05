@@ -70,7 +70,7 @@ deployment is optional. To deploy your own:
 ```bash
 bash scripts/deploy.sh                  # simulate against whatever CHAIN_ID names
 npm run deploy                          # broadcast
-npm run approve-verifiers               # grant roles, approve the two verifiers
+npm run approve-verifiers               # grant roles, approve the four verifiers
 ```
 
 The script refuses to run against the wrong chain, refuses an unfunded deployer,

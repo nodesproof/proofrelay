@@ -76,6 +76,8 @@ for (const [name, floor] of [
   ["ADJUDICATOR_ADDRESS", 1_000_000_000_000_000n],
   ["VERIFIER_A_ADDRESS", 2_000_000_000_000_000n],
   ["VERIFIER_B_ADDRESS", 2_000_000_000_000_000n],
+  ["VERIFIER_C_ADDRESS", 2_000_000_000_000_000n],
+  ["VERIFIER_D_ADDRESS", 2_000_000_000_000_000n],
   // One `prepare` writes up to 21 objects at a measured 0.001182 0G each, so
   // anything under a full prepare's worth is already too late — the request
   // that finds out is the one that fails. The storage health probe only catches
@@ -98,7 +100,7 @@ for (const [name, role] of [["KEEPER_ADDRESS", ROLE.KEEPER], ["ADJUDICATOR_ADDRE
     ? ok(`${name} holds its role`)
     : bad(`${name} does not hold its role — run \`npm run approve-verifiers\``);
 }
-for (const name of ["VERIFIER_A_ADDRESS", "VERIFIER_B_ADDRESS"]) {
+for (const name of ["VERIFIER_A_ADDRESS", "VERIFIER_B_ADDRESS", "VERIFIER_C_ADDRESS", "VERIFIER_D_ADDRESS"]) {
   const address = env(name);
   if (!address) continue;
   const record = await chain.getVerifier(address).catch(() => null);

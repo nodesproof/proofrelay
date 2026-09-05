@@ -23,6 +23,8 @@
     "api": "node apps/api/dist/server.js",
     "verifier:a": "VERIFIER_PROFILE=a node workers/verifier/dist/main.js",
     "verifier:b": "VERIFIER_PROFILE=b node workers/verifier/dist/main.js",
+    "verifier:c": "VERIFIER_PROFILE=c node workers/verifier/dist/main.js",
+    "verifier:d": "VERIFIER_PROFILE=d node workers/verifier/dist/main.js",
     "adjudicator": "node workers/adjudicator/dist/main.js",
     "wallets": "node scripts/wallets.mjs",
     "fund": "node scripts/fund.mjs",
@@ -51,7 +53,8 @@
     "check:full-cycle": "node scripts/checks/full-cycle.mjs",
     "check:lifecycle": "node scripts/checks/lifecycle-paths.mjs",
     "check:api": "node scripts/checks/api-surface.mjs",
-    "check:index": "node scripts/checks/index-live.mjs"
+    "check:index": "node scripts/checks/index-live.mjs",
+    "check:compute": "node scripts/checks/verifier-compute.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

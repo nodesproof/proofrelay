@@ -63,7 +63,7 @@ Four roles, deliberately separated (architecture doc §16):
 | Deployer / admin | `PRIVATE_KEY` | approve verifiers, set params, pause | move escrow |
 | Keeper | `KEEPER_PRIVATE_KEY` | `finalizeConsensus` | choose payout amounts, withdraw |
 | Adjudicator | `ADJUDICATOR_PRIVATE_KEY` | `resolveDispute` | move escrow outside the state machine |
-| Verifier A / B | `VERIFIER_*_PRIVATE_KEY` | commit, reveal, claim their own reward | anything else |
+| Verifier A / B / C / D | `VERIFIER_*_PRIVATE_KEY` | commit, reveal, claim their own reward | anything else |
 | Storage | `STORAGE_PRIVATE_KEY` | pay 0G Storage fees | nothing onchain — it holds no role |
 
 Keep the keeper balance small. It is an availability role, not a custody role:
@@ -118,7 +118,7 @@ receipts at the 4 gwei both networks settle at (see the table in the README).
 | Admin | yes | 0.0188 to deploy, 0.0002 per `grantRole` | No verifier can be approved, no param set, no pause. Anything already running keeps running. |
 | Keeper | **yes, continuously** | 0.00078 per task | **Not neutral.** Tasks fall past the grace period to permissionless `expireTask`, which pays revealers `conflictRateBps` — half the bounty — and lands a terminal `Expired`/`Conflict` status that forecloses the dispute window. |
 | Adjudicator | only when challenged | 0.0007 per dispute | `expireDispute` opens to anyone after the window: half the challenger's bond is forfeited to the verifiers, the rest returned, and the challenge is never decided on its merits. |
-| Verifier A / B | **yes, continuously** | 0.0014 per task, plus 0.00069 once to register | It cannot commit, so the task runs short of its verifier set and expires. Rewards accrue onchain and are claimable later, so nothing is lost — but the verifier earns nothing while it is empty. |
+| Verifier A / B / C / D | **yes, continuously** | 0.0014 per task, plus 0.00069 once to register | It cannot commit, so the task runs short of its verifier set and expires. Rewards accrue onchain and are claimable later, so nothing is lost — but the verifier earns nothing while it is empty. |
 | Storage | **yes, continuously** | 0.001182 per object, up to 21 per `prepare` | `POST /v1/tasks/prepare` fails outright. This is the key that empties fastest. |
 | Creator | only to post tasks from the CLI | 0.001 plus the bounty | `npm run seed` and `npm run demo` cannot post. Real users pay from their own wallets and never touch this key. |
 | Compute | only under `COMPUTE_DRIVER=zerog-broker` | ~0.1 buys ~10,000 requests | The verifier fails at `acknowledgeProviderSigner` with `insufficient funds`. Unused under `zerog-router`, which bills an API key instead. |
@@ -341,7 +341,7 @@ What each process needs, and what it does when it does not have it:
 | Service | Port | Depends on |
 |---|---|---|
 | `proofrelay-api` | `API_PORT` (8080) | Postgres, the chain RPC. Exits and is restarted with backoff until both answer. |
-| `proofrelay-verifier-a` / `-b` | — | The API's dispatcher and its own `.env.verifier-<x>`. |
+| `proofrelay-verifier-a` … `-d` | — | The API's dispatcher and its own `.env.verifier-<x>`. |
 | `proofrelay-adjudicator` | — | `ADJUDICATOR_PRIVATE_KEY` holding `ADJUDICATOR_ROLE`. |
 | `proofrelay-web` | `WEB_PORT` (3005) | Nothing at boot; serves `proofrelay-frontend/dist/public`. |
 
@@ -385,7 +385,7 @@ withdrawal.
 ## Definition of done (architecture doc §24)
 
 - [ ] Contract deployed to 16602; address and chain ID documented above
-- [ ] Verifier A and B registered and approved
+- [ ] Verifier A, B, C and D registered and approved
 - [ ] One task created from the UI; escrow visible on the explorer
 - [ ] Manifest and both reports retrievable from 0G Storage by pointer
 - [ ] At least one successful 0G Compute call recorded in a report's trace
