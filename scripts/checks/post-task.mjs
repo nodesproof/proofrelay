@@ -13,6 +13,11 @@ const config = loadConfig();
 assertContractConfigured(config);
 const apiUrl = env("VITE_API_URL") ?? `http://127.0.0.1:${config.api.port}`;
 const windowSec = Number(env("TASK_WINDOW_SEC") ?? 120);
+// Slots, not a target: commitReport reverts once committedCount reaches this,
+// and reveal opens as soon as every slot is filled. Set it to the number of
+// verifiers you actually want in the task — 2 is the contract MIN_VERIFIERS,
+// and a deployment running four leaves two of them locked out at that default.
+const verifierCount = Number(env("TASK_VERIFIER_COUNT") ?? 2);
 
 const chain = new ChainClient({
   chainId: config.chain.chainId,
@@ -42,7 +47,7 @@ const body = {
       label: "https://docs.0g.ai/introduction/understanding-0g",
     },
   ],
-  verifierCount: 2,
+  verifierCount,
   commitWindowSec: windowSec,
   revealWindowSec: windowSec,
   disputeWindowSec: windowSec,
