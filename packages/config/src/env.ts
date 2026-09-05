@@ -110,6 +110,18 @@ export function envInt(key: string, fallback: number): number {
   return parsed;
 }
 
+/**
+ * A wei amount. Decimal digits only — no ether-denominated shorthand, because a
+ * value that means 0.002 in one variable and 2000000000000000 in another is how
+ * a sponsorship budget gets funded a thousand times over by a missing decimal.
+ */
+export function envBigInt(key: string, fallback: bigint): bigint {
+  const value = env(key);
+  if (value === undefined) return fallback;
+  if (!/^\d+$/.test(value)) throw new Error(`${key} must be a decimal wei amount, got ${value}`);
+  return BigInt(value);
+}
+
 export function envBool(key: string, fallback: boolean): boolean {
   const value = env(key);
   if (value === undefined) return fallback;

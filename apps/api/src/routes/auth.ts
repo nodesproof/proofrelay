@@ -15,7 +15,7 @@ import {
   VerifyResponse,
 } from "@proofrelay/schemas";
 import type { RouteContext } from "../app.js";
-import { authOptionsFromConfig, createChallenge, verifyChallenge } from "../auth/siwe.js";
+import { authOptionsFromConfig, bearerToken, createChallenge, revokeSession, verifyChallenge } from "../auth/siwe.js";
 
 export async function registerAuthRoutes(app: FastifyInstance, ctx: RouteContext): Promise<void> {
   const options = authOptionsFromConfig(ctx.config);
@@ -29,6 +29,25 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: RouteContext
       message: challenge.message,
       expiresAt: challenge.expiresAt,
     });
+  });
+
+  /**
+   * Revoking is not the same as forgetting. A UI that only drops its copy of the
+   * token leaves it live on the server until `SESSION_TTL_SEC` runs out, which
+   * is not what a user who clicked "sign out" was told would happen —
+   * `revokeSession` has existed since the auth layer was written and nothing
+   * reached it.
+   *
+   * 204 whether or not a row was hit. A caller learning that its token *was*
+   * still valid is the one piece of information a logout has no reason to give.
+   */
+  app.post("/v1/auth/logout", async (request, reply) => {
+    const token = bearerToken(request.headers.authorization);
+    if (token) {
+      const revoked = await revokeSession(ctx.pool, token, ctx.now());
+      ctx.logger.info("auth session revoked", { requestId: request.id, revoked });
+    }
+    return reply.code(204).send();
   });
 
   app.post("/v1/auth/verify", async (request) => {

@@ -7,6 +7,10 @@
  * be shown (FRONTEND_DATA_CONTRACT §6.3), never swallowed into "something went
  * wrong".
  */
+import { getAccount } from "wagmi/actions";
+
+import { clearSession, tokenFor } from "./session";
+import { wagmiConfig } from "./wagmi";
 import type {
   ActivityListResponse,
   Address,
@@ -114,11 +118,27 @@ interface RequestOptions {
   idempotencyKey?: string;
 }
 
+/**
+ * The session token for the address the wallet is on right now.
+ *
+ * Read per request rather than captured once, and matched against the live
+ * account rather than the one that signed in: the API resolves the acting
+ * address from the session *before* it reads `creator` from the body, so a
+ * token left over from a previous account would file a task under an address
+ * the user had already switched away from.
+ */
+function authorization(): string | null {
+  const token = tokenFor(getAccount(wagmiConfig).address);
+  return token ? `Bearer ${token}` : null;
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const url = buildUrl(path, options.query);
   const headers: Record<string, string> = { Accept: "application/json" };
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
   if (options.idempotencyKey) headers["Idempotency-Key"] = options.idempotencyKey;
+  const bearer = authorization();
+  if (bearer) headers.Authorization = bearer;
 
   let response: Response;
   try {
@@ -139,7 +159,15 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     throw new ApiError({ code: "CHAIN_UNAVAILABLE", message: `Cannot reach the ProofRelay API at ${API_URL}`, status: 0, url });
   }
 
-  if (!response.ok) throw await toApiError(response, url);
+  if (!response.ok) {
+    const error = await toApiError(response, url);
+    // The server is the authority on whether a token is still good. Holding one
+    // it has already refused leaves the UI claiming to be signed in while every
+    // authenticated request fails, and the fix — sign in again — is the one
+    // action the UI would be hiding.
+    if (error.status === 401) clearSession();
+    throw error;
+  }
   if (response.status === 204) return undefined as T;
 
   try {
@@ -239,6 +267,15 @@ export function authNonce(address: Address, signal?: AbortSignal): Promise<Nonce
 
 export function authVerify(body: VerifyRequest, signal?: AbortSignal): Promise<VerifyResponse> {
   return request<VerifyResponse>("/v1/auth/verify", { method: "POST", body, signal });
+}
+
+/**
+ * Revokes the bearer token this browser holds. Clearing localStorage alone
+ * would leave the session live on the server for the rest of its TTL, which is
+ * not what "sign out" means to anyone who clicks it.
+ */
+export function authLogout(signal?: AbortSignal): Promise<void> {
+  return request<void>("/v1/auth/logout", { method: "POST", signal });
 }
 
 /** Random enough that a double-submit reuses one key only when it is the same submit. */

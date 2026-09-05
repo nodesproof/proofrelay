@@ -6,12 +6,12 @@
  * ProofRelay. Nothing here fabricates a value: when the API has not answered
  * yet, `data` is undefined and the caller renders the design's loading state.
  */
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { parseEventLogs } from "viem";
 import type { Hash, PublicClient } from "viem";
-import { useAccount, useBlockNumber, useConfig, useConnect, useConnectors, useDisconnect, usePublicClient, useReadContract, useSwitchChain, useWriteContract } from "wagmi";
+import { useAccount, useBlockNumber, useConfig, useConnect, useConnectors, useDisconnect, usePublicClient, useReadContract, useSignMessage, useSwitchChain, useWriteContract } from "wagmi";
 import type { Connector } from "wagmi";
 import { waitForTransactionReceipt } from "wagmi/actions";
 
@@ -20,6 +20,7 @@ import { ApiError, isApiError } from "@/lib/api";
 import { PROOFRELAY_ADDRESS, proofRelayAbi } from "@/lib/contract";
 import { chainFeePair } from "@/lib/fees";
 import { preflightWrite, type WriteRequest } from "@/lib/preflight";
+import { clearSession, forgetForeignSession, readSession, writeSession, type StoredSession } from "@/lib/session";
 import { ACTIVE_CHAIN_ID, MIN_PRIORITY_FEE_WEI, explorerTxUrl, wagmiConfig } from "@/lib/wagmi";
 import type {
   ActivityListResponse,
@@ -318,6 +319,103 @@ export function useWallet(): WalletState {
       switchError: switchError ?? null,
     }),
     [account.address, account.chainId, account.connector, account.isConnected, account.isConnecting, account.isReconnecting, connect, connectError, connectors, disconnect, isConnectPending, isSwitchingNetwork, switchError, switchNetwork],
+  );
+}
+
+/* ── session ─────────────────────────────────────────────────────────────── */
+
+export interface SessionState {
+  address: Address | undefined;
+  /** This browser holds a token the *connected* address signed for. */
+  isSignedIn: boolean;
+  expiresAt: string | null;
+  isSigningIn: boolean;
+  isSigningOut: boolean;
+  error: Error | null;
+  signIn: () => Promise<void>;
+  signOut: () => Promise<void>;
+}
+
+/**
+ * SIWE, finally wired to the API that has always spoken it.
+ *
+ * Signing in is not a wallet connection: connecting proves nothing to a server,
+ * because an address is public. The signature over the server's own challenge is
+ * what lets `prepare` stop trusting the `creator` in a request body — the route
+ * that uploads up to 21 objects to 0G Storage on the operator's key, and the one
+ * `POST /v1/tasks/sponsor` will not serve without a session at all.
+ *
+ * It authorises no transaction. `AUTH_STATEMENT` says so in the text the wallet
+ * displays, because a user who cannot tell a login from a transfer is one prompt
+ * away from signing something else.
+ */
+export function useSession(): SessionState {
+  const { address } = useAccount();
+  const { signMessageAsync } = useSignMessage();
+  const [stored, setStored] = useState<StoredSession | null>(() => readSession());
+
+  // An account switch invalidates a session that account never signed for.
+  // `tokenFor` already refuses to send it; this is what stops the UI claiming
+  // to hold it.
+  useEffect(() => {
+    if (forgetForeignSession(address)) setStored(null);
+    else setStored(readSession());
+  }, [address]);
+
+  const signIn = useMutation<StoredSession, Error, void>({
+    mutationKey: ["proofrelay", "signIn"],
+    mutationFn: async () => {
+      if (!address) throw new Error("Connect a wallet before signing in.");
+      const challenge = await api.authNonce(address);
+      // The server's message, verbatim. `verifyChallenge` rebuilds the exact
+      // bytes it issued from the nonce row and never accepts a message from the
+      // client — which is what binds the domain and chain in the text the wallet
+      // shows to the ones the server will check. Signing anything else here does
+      // not verify.
+      const signature = await signMessageAsync({ account: address, message: challenge.message });
+      const verified = await api.authVerify({ address, signature, nonce: challenge.nonce });
+      const session: StoredSession = {
+        token: verified.token,
+        address: verified.address.toLowerCase(),
+        expiresAt: verified.expiresAt,
+      };
+      writeSession(session);
+      return session;
+    },
+    onSuccess: setStored,
+  });
+
+  const signOut = useMutation<void, Error, void>({
+    mutationKey: ["proofrelay", "signOut"],
+    mutationFn: async () => {
+      // Revoke, then forget. The local copy goes either way: a user who clicked
+      // sign out is signed out, and a token the server never heard about being
+      // revoked still expires on its own TTL. Clearing first would leave nothing
+      // to revoke *with*.
+      await api.authLogout().catch(() => undefined);
+      clearSession();
+    },
+    onSuccess: () => setStored(null),
+  });
+
+  const isSignedIn = Boolean(stored && address && stored.address === address.toLowerCase());
+
+  return useMemo<SessionState>(
+    () => ({
+      address,
+      isSignedIn,
+      expiresAt: isSignedIn ? (stored?.expiresAt ?? null) : null,
+      isSigningIn: signIn.isPending,
+      isSigningOut: signOut.isPending,
+      error: signIn.error ?? null,
+      signIn: async () => {
+        await signIn.mutateAsync();
+      },
+      signOut: async () => {
+        await signOut.mutateAsync();
+      },
+    }),
+    [address, isSignedIn, signIn, signOut, stored?.expiresAt],
   );
 }
 

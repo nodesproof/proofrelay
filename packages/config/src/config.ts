@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import type { Address, Hex } from "viem";
 import { networkInfo } from "@proofrelay/chain-client";
-import { env, envBool, envInt, envList, loadEnv, repoRoot, requireEnv, resolvedFrom } from "./env.js";
+import { env, envBigInt, envBool, envInt, envList, loadEnv, repoRoot, requireEnv, resolvedFrom } from "./env.js";
 
 export interface ChainConfig {
   chainId: number;
@@ -128,6 +128,40 @@ export interface OrchestratorConfig {
   adjudicatorPrivateKey: Hex | undefined;
 }
 
+/**
+ * The free first task.
+ *
+ * `createTask` takes no privileged caller — it is `external payable` and sets
+ * `t.creator = msg.sender` — so a sponsored task needs no contract change at
+ * all, only a funded key that signs one on somebody else's behalf. What it does
+ * need is a bound, because that key is spending real 0G with no user paying for
+ * it: `maxPerAddress` stops casual repeat use and `maxTotal` is the number that
+ * actually caps the programme. A signed-in wallet is not a scarce identity —
+ * `app.ts` says so about rate limiting, and it is just as true here — so the
+ * global cap is the only limit that holds against someone generating keypairs.
+ *
+ * Disabled unless SPONSOR_PRIVATE_KEY is set, and the key must be its own: a
+ * sponsor that shares an address with the keeper or the deployer breaks the
+ * separation `npm run roles` audits, and the nonce prediction below assumes
+ * this process is the only sender from it.
+ */
+export interface SponsorConfig {
+  enabled: boolean;
+  privateKey: Hex | undefined;
+  /** What every sponsored task escrows. Fixed, so a caller cannot name it. */
+  bountyWei: bigint;
+  maxPerAddress: number;
+  maxTotal: number;
+  /** Refuse a grant that would leave the sponsor unable to pay gas for the next. */
+  minBalanceWei: bigint;
+  /**
+   * How long a reservation with no receipt keeps holding its slot. Long on
+   * purpose: a shorter window would hand the slot back while a broadcast that
+   * has already been signed is still landing, and the sponsor would pay twice.
+   */
+  reservationTtlSec: number;
+}
+
 export interface VerifierProfile {
   id: string;
   profile: string;
@@ -148,6 +182,7 @@ export interface Config {
   fetch: FetchConfig;
   indexer: IndexerConfig;
   orchestrator: OrchestratorConfig;
+  sponsor: SponsorConfig;
   version: string;
 }
 
@@ -255,6 +290,23 @@ export function loadConfig(): Config {
       keeperPrivateKey: asHex(env("KEEPER_PRIVATE_KEY")),
       adjudicatorPrivateKey: asHex(env("ADJUDICATOR_PRIVATE_KEY")),
     },
+    sponsor: {
+      // Having the key is not the same as wanting to spend it. Both are needed,
+      // and the key alone is not enough to start giving 0G away.
+      enabled: envBool("SPONSOR_ENABLED", false) && Boolean(env("SPONSOR_PRIVATE_KEY")),
+      privateKey: asHex(env("SPONSOR_PRIVATE_KEY")),
+      // 0.002 0G — what `npm run seed` posts, and above the deployed contract's
+      // minBounty. `assertSponsorBounty` checks that against the live chain at
+      // boot rather than trusting this default to still clear it.
+      bountyWei: envBigInt("SPONSOR_BOUNTY_WEI", 2_000_000_000_000_000n),
+      maxPerAddress: envInt("SPONSOR_MAX_PER_ADDRESS", 1),
+      maxTotal: envInt("SPONSOR_MAX_TOTAL", 100),
+      // 0.05 0G: enough gas for many more createTask calls at 0.001 each, so
+      // the programme stops on a number an operator chose rather than on a
+      // failed transaction.
+      minBalanceWei: envBigInt("SPONSOR_MIN_BALANCE_WEI", 50_000_000_000_000_000n),
+      reservationTtlSec: envInt("SPONSOR_RESERVATION_TTL_SEC", 3_600),
+    },
   };
 }
 
@@ -296,6 +348,7 @@ export function describeConfig(config: Config): string {
     `deployBlock=${config.chain.deployBlock}`,
     `storage=${config.storage.driver}`,
     `compute=${config.compute.driver}`,
+    `sponsor=${config.sponsor.enabled ? `on (${config.sponsor.maxTotal} max)` : "off"}`,
   ].join("  ");
 }
 

@@ -297,6 +297,46 @@ export const PrepareTaskResponse = z.object({
 });
 export type PrepareTaskResponse = z.infer<typeof PrepareTaskResponse>;
 
+/* ── /v1/tasks/sponsor ───────────────────────────────────────────────────── */
+
+/**
+ * A sponsored task is a prepared task with the bounty taken away.
+ *
+ * The amount is the operator's to set, not the caller's: this route escrows the
+ * sponsor's own 0G, and a caller who could name the figure could name any of it.
+ */
+export const SponsorTaskRequest = PrepareTaskRequest.omit({ bountyWei: true });
+export type SponsorTaskRequest = z.infer<typeof SponsorTaskRequest>;
+
+export const SponsorTaskResponse = z.object({
+  taskId: hex32,
+  manifestHash: hex32,
+  manifestPointer: z.string(),
+  bountyWei: z.string(),
+  /**
+   * The address that signed `createTask`, and therefore the creator the
+   * contract recorded. Not the beneficiary — `t.creator = msg.sender`, and the
+   * creator is who may cancel the task, claim its refund on expiry, and
+   * challenge as its creator.
+   */
+  sponsor: address,
+  /**
+   * The wallet the task was sponsored for. Bound into the manifest, which is
+   * content-addressed and permanent, and recorded in `sponsorships`. It is not
+   * on chain and cannot be read from there.
+   */
+  beneficiary: address,
+  tx: TxRef,
+  warnings: z.array(z.string()),
+  /** What is left of the programme, so the UI can say so before it runs out. */
+  remaining: z.object({
+    forBeneficiary: z.number().int(),
+    total: z.number().int(),
+  }),
+});
+export type SponsorTaskResponse = z.infer<typeof SponsorTaskResponse>;
+
+
 /* ── /v1/tasks/:taskId/challenge ─────────────────────────────────────────── */
 
 export const PrepareChallengeRequest = z.object({
