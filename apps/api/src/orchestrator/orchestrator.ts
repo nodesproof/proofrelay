@@ -392,10 +392,14 @@ export async function evaluateTask(
     );
   }
 
+  // Kept in lockstep: a discarded report must not leave its hash behind in the
+  // artifact, or the result would cite evidence the consensus never weighed.
   const reports: VerifierReport[] = [];
   const reportHashes: string[] = [];
   for (const row of reportRows) {
-    reports.push(await loadReport(deps, taskId, row));
+    const report = await loadReport(deps, taskId, row);
+    if (!report) continue;
+    reports.push(report);
     reportHashes.push(row.report_hash as string);
   }
 
@@ -491,11 +495,12 @@ async function loadManifest(deps: OrchestratorDeps, task: TaskRow): Promise<Task
   return TaskManifest.parse(body);
 }
 
+/** Null when the report disowns itself — see the address check below. */
 async function loadReport(
   deps: OrchestratorDeps,
   taskId: string,
   row: ReportRow,
-): Promise<VerifierReport> {
+): Promise<VerifierReport | null> {
   const reference = row.report_pointer ?? row.report_hash;
   if (!reference) {
     throw new ProofRelayError("REPORT_NOT_FOUND", "revealed report has no pointer", {
@@ -524,6 +529,29 @@ async function loadReport(
       retryable: false,
       detail: { taskId, reportTaskId: report.taskId, verifier: row.verifier },
     });
+  }
+
+  // `report.verifier.address` is a field inside a document the verifier wrote.
+  // `row.verifier` is the chain's own answer — the `msg.sender` that revealed.
+  // The engine keys votes, the one-report-per-verifier collapse and
+  // `rewardedVerifiers` on the former while asserting it equals the latter, and
+  // until this check nothing on this path enforced that. A verifier naming a
+  // peer's address could put a second vote under that peer's name, or push an
+  // address that never revealed into the beneficiary set — which the contract
+  // rejects, so settlement fails and the task expires. No theft, but one
+  // participant could stop the product working.
+  //
+  // Discarded rather than thrown: refusing the whole evaluation is the outage
+  // the lie was trying to cause. `adjudicator.ts` has done this since it was
+  // written; this is the same check on the settlement path.
+  if (report.verifier.address.toLowerCase() !== String(row.verifier).toLowerCase()) {
+    deps.logger.warn("discarding a report that names a different verifier than the chain", {
+      taskId,
+      verifier: row.verifier,
+      claimed: report.verifier.address,
+      reportHash: row.report_hash,
+    });
+    return null;
   }
   return report;
 }
