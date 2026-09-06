@@ -214,6 +214,105 @@ export function siteMeta(origin: string, path: string, imagesAvailable: boolean)
   });
 }
 
+/* ── the machine-readable verdict ────────────────────────────────────────── */
+
+/**
+ * The three verdicts a settled claim can carry. `PENDING` is not one: a claim
+ * nobody has reported on has no rating, and emitting a ClaimReview for it would
+ * publish a judgement that does not exist.
+ */
+const RATED = new Set(["SUPPORTED", "CONTRADICTED", "INSUFFICIENT"]);
+
+/** What the UI shows, spelled the way a reader of the structured data needs. */
+const RATING_LABEL: Record<string, string> = {
+  SUPPORTED: "Supported by the cited sources",
+  CONTRADICTED: "Contradicted by the cited sources",
+  INSUFFICIENT: "Not settled by the cited sources",
+};
+
+/**
+ * Safe to place between `<script>` tags.
+ *
+ * `JSON.stringify` will happily emit `</script>` from a claim someone typed, and
+ * that closes the block and starts an injection. Escaping the three characters
+ * that can begin a tag or an HTML comment leaves valid JSON — `\u003c` parses
+ * back to `<` — and cannot break out.
+ */
+export function escapeJsonLd(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026");
+}
+
+/**
+ * One schema.org ClaimReview per settled claim, or "" when there is nothing
+ * honest to say.
+ *
+ * This is the only route by which a verdict leaves this UI. Without it a result
+ * exists solely inside this site: nothing can quote it, index it, or ingest it.
+ *
+ * `author` is the deployment, named by the host it is served from — not
+ * "ProofRelay" the protocol, which cannot be accountable for anything, and not
+ * the verifiers, which are the raters rather than the publisher. The operator of
+ * a deployment decides which verifiers may participate (`setVerifierApproval` is
+ * admin-only), which consensus rule aggregates them, and which sources are
+ * fetched. That is editorial control, and ClaimReview's `author` is an
+ * accountability field: it names who can be told they are wrong. Deriving it
+ * from the request origin means a fork that runs its own instance signs its own
+ * ratings rather than this one's.
+ *
+ * Deliberately absent: a numeric `ratingValue`. Mapping these three verdicts
+ * onto a truth scale would invent a precision the pipeline does not have, and
+ * the confidence the page shows is self-reported by the model and never
+ * calibrated. `alternateName` says what was decided without pretending to
+ * measure how true it is.
+ */
+export function claimReviewLd(body: unknown, origin: string): string {
+  if (!body || typeof body !== "object") return "";
+  const task = body as Record<string, unknown>;
+  const taskId = str(task.taskId);
+  if (!/^0x[0-9a-fA-F]{64}$/.test(taskId)) return "";
+
+  // Only a settled task has ratings to publish. An open one is a question.
+  const consensus = task.consensus;
+  if (!consensus || typeof consensus !== "object") return "";
+  const evaluatedAt = str((consensus as Record<string, unknown>).evaluatedAt);
+  if (!evaluatedAt) return "";
+
+  const claims = Array.isArray(task.claims) ? task.claims : [];
+  const url = `${origin}/task/${taskId}`;
+  const author = {
+    "@type": "Organization",
+    name: new URL(origin).host,
+    url: origin,
+  };
+
+  const reviews = claims
+    .map((entry) => (entry && typeof entry === "object" ? (entry as Record<string, unknown>) : null))
+    .filter((claim): claim is Record<string, unknown> => claim !== null)
+    .filter((claim) => RATED.has(str(claim.displayVerdict)))
+    .map((claim) => ({
+      "@context": "https://schema.org",
+      "@type": "ClaimReview",
+      url,
+      claimReviewed: truncate(str(claim.claimText), 400),
+      datePublished: evaluatedAt,
+      author,
+      reviewRating: {
+        "@type": "Rating",
+        alternateName: RATING_LABEL[str(claim.displayVerdict)] ?? str(claim.displayVerdict),
+      },
+      itemReviewed: {
+        "@type": "Claim",
+        text: truncate(str(claim.claimText), 400),
+      },
+    }));
+
+  if (reviews.length === 0) return "";
+  return `<script type="application/ld+json">${escapeJsonLd(reviews)}</script>`;
+}
+
 /* ── the image ───────────────────────────────────────────────────────────── */
 
 export const CARD_WIDTH = 1200;

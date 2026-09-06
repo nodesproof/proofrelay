@@ -423,6 +423,8 @@ button.signal-row:disabled { opacity: .72; }
    know before weighing anything below it. */
 .section-disclosure { margin: 0 0 13px; padding: 10px 13px; border: 1px solid #e2e6e0; border-radius: 9px; background: #fbfbf8; color: #5f6761; font-size: 12px; line-height: 1.6; }
 .section-disclosure a { color: #3c4c44; text-decoration: underline; text-underline-offset: 2px; }
+.disclosure-by { display: block; margin-top: 6px; padding-top: 6px; border-top: 1px solid #edefea; }
+.disclosure-by strong { color: #3c4c44; font-weight: 700; }
 .side-note strong { color: #3c4c44; font-weight: 700; }
 .side-list { padding-bottom: 6px; }
 .side-card .empty-state { padding: 19px 17px 23px; font-size: 13px; }

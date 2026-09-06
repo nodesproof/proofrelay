@@ -9,6 +9,7 @@
 import { describe, expect, it } from "vitest";
 import {
   cardFromTask,
+  claimReviewLd,
   escapeAttr,
   injectHead,
   siteMeta,
@@ -201,5 +202,88 @@ describe("taskCardSvg", () => {
 
   it("omits the agreement stat when the task has no label for it", () => {
     expect(taskCardSvg({ ...CARD, agreementLabel: "" })).not.toContain("AGREEMENT");
+  });
+});
+
+describe("ClaimReview structured data", () => {
+  const settled = (over = {}) => ({
+    taskId: `0x${"11".repeat(32)}`,
+    consensus: { outcome: "CONSENSUS", evaluatedAt: "2026-09-06T03:34:32.000Z" },
+    claims: [
+      { claimText: "The most specific match found must be used.", displayVerdict: "SUPPORTED" },
+      { claimText: "The URI is disallowed when nothing matches.", displayVerdict: "CONTRADICTED" },
+    ],
+    ...over,
+  });
+
+  const parse = (html: string) =>
+    JSON.parse(html.replace(/^<script type="application\/ld\+json">/, "").replace(/<\/script>$/, ""));
+
+  it("emits one ClaimReview per rated claim", () => {
+    const reviews = parse(claimReviewLd(settled(), "https://proofrelay.nectiq.xyz"));
+    expect(reviews).toHaveLength(2);
+    expect(reviews[0]["@type"]).toBe("ClaimReview");
+    expect(reviews[1].reviewRating.alternateName).toMatch(/Contradicted/);
+  });
+
+  /**
+   * `author` is an accountability field: it names who can be told the rating is
+   * wrong. The deployment signs its own ratings, so a fork running its own
+   * instance does not publish under this one's name.
+   */
+  it("names the deployment it is served from as the author", () => {
+    const [review] = parse(claimReviewLd(settled(), "https://proofrelay.nectiq.xyz"));
+    expect(review.author).toEqual({
+      "@type": "Organization",
+      name: "proofrelay.nectiq.xyz",
+      url: "https://proofrelay.nectiq.xyz",
+    });
+    const [forked] = parse(claimReviewLd(settled(), "https://someone-else.example"));
+    expect(forked.author.name).toBe("someone-else.example");
+  });
+
+  /**
+   * The load-bearing one. `claimText` is whatever the task creator typed, and
+   * JSON.stringify will emit `</script>` from it verbatim — which closes the
+   * block and starts an injection on a page whose head is assembled by hand.
+   */
+  it("cannot be escaped out of by a hostile claim", () => {
+    const hostile = '</script><img src=x onerror=alert(1)>';
+    const html = claimReviewLd(
+      settled({ claims: [{ claimText: hostile, displayVerdict: "SUPPORTED" }] }),
+      "https://proofrelay.nectiq.xyz",
+    );
+    expect(html).not.toContain("</script><img");
+    expect(html.match(/<\/script>/g)).toHaveLength(1);
+    // Still valid JSON, and the text survives intact once parsed.
+    expect(parse(html)[0].claimReviewed).toBe(hostile);
+  });
+
+  /** A claim nobody has reported on has no rating to publish. */
+  it("says nothing about an unsettled task", () => {
+    expect(claimReviewLd(settled({ consensus: null }), "https://proofrelay.nectiq.xyz")).toBe("");
+    expect(
+      claimReviewLd(
+        settled({ claims: [{ claimText: "x", displayVerdict: "PENDING" }] }),
+        "https://proofrelay.nectiq.xyz",
+      ),
+    ).toBe("");
+  });
+
+  /** A body that is not a task must degrade to silence, never to an error. */
+  it("returns nothing rather than throwing on a body it does not recognise", () => {
+    for (const body of [null, undefined, 42, "task", {}, { taskId: "nope" }]) {
+      expect(claimReviewLd(body, "https://proofrelay.nectiq.xyz")).toBe("");
+    }
+  });
+
+  /**
+   * No numeric ratingValue. Mapping three verdicts onto a truth scale would
+   * invent a precision this pipeline does not have.
+   */
+  it("publishes a textual rating and no invented number", () => {
+    const [review] = parse(claimReviewLd(settled(), "https://proofrelay.nectiq.xyz"));
+    expect(review.reviewRating.ratingValue).toBeUndefined();
+    expect(review.reviewRating.alternateName).toMatch(/Supported by the cited sources/);
   });
 });

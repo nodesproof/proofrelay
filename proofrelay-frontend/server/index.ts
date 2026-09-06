@@ -4,7 +4,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-import { cardFromTask, defaultCardSvg, injectHead, siteMeta, taskCardSvg, taskMeta } from "./og.js";
+import { cardFromTask, claimReviewLd, defaultCardSvg, injectHead, siteMeta, taskCardSvg, taskMeta } from "./og.js";
 import { available, cached, remember, renderPng } from "./og-render.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -49,11 +49,15 @@ function taskRef(value: string): string | null {
 }
 
 /**
- * The task behind a share link, or null. Every failure — a slow API, a 404, a
- * body that is not a task — lands in the same place: the page is served from
- * the plain shell, exactly as it was before this existed.
+ * The task behind a share link as the API returned it, or null. Every failure —
+ * a slow API, a 404, a body that is not JSON — lands in the same place: the page
+ * is served from the plain shell, exactly as it was before this existed.
+ *
+ * Returns the whole body rather than a card because two things are built from
+ * it now, and the structured data needs per-claim fields a card never carried.
+ * Each caller narrows it, so a shape that defeats one still leaves the other.
  */
-async function fetchTask(ref: string): Promise<ReturnType<typeof cardFromTask>> {
+async function fetchTask(ref: string): Promise<unknown> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), OG_FETCH_TIMEOUT_MS);
   try {
@@ -62,7 +66,7 @@ async function fetchTask(ref: string): Promise<ReturnType<typeof cardFromTask>> 
       signal: controller.signal,
     });
     if (!response.ok) return null;
-    return cardFromTask(await response.json());
+    return await response.json();
   } catch {
     return null;
   } finally {
@@ -200,7 +204,7 @@ async function startServer() {
     const ref = taskRef(String(req.params.taskId ?? ""));
     if (!ref) return res.status(400).end();
 
-    const card = await fetchTask(ref);
+    const card = cardFromTask(await fetchTask(ref));
     if (!card) return res.status(404).end();
 
     // Keyed on what the card actually draws, not on the task id: a reveal
@@ -225,9 +229,13 @@ async function startServer() {
     const origin = originOf(req);
     if (!ref || !origin) return res.type("html").send(readShell());
 
-    const [card, images] = await Promise.all([fetchTask(ref), available()]);
+    const [body, images] = await Promise.all([fetchTask(ref), available()]);
+    const card = cardFromTask(body);
     const head = card ? taskMeta(card, origin, images) : siteMeta(origin, req.path, images);
-    return res.type("html").send(injectHead(readShell(), head));
+    // The share card and the structured data are built from the same response
+    // but fail independently: a task whose shape defeats one should still get
+    // the other, and neither may turn this route into an error page.
+    return res.type("html").send(injectHead(readShell(), head + claimReviewLd(body, origin)));
   });
 
   // `index: false` so the shell only ever leaves through the handlers above and
