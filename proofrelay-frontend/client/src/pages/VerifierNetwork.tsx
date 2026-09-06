@@ -83,6 +83,14 @@ export default function VerifierNetwork() {
   const onchain = useOnchainVerifier(current?.address);
   const chainRecord = onchain.data;
 
+  // The connected wallet's OWN record, which is a different question from the
+  // selected operator's. registerVerifier is idempotent and doubles as the
+  // update path — a second call adds to the stake and overwrites the metadata —
+  // so what this form means depends entirely on whether the caller is already
+  // registered, and only the chain knows that.
+  const self = useOnchainVerifier(wallet.address);
+  const selfRegistered = self.data?.registered === true;
+
   const explorer = health.data?.explorer || EXPLORER_URL;
   const checksummedCurrent = current ? toChecksumAddress(current.address) : null;
   const isSelf = Boolean(current && sameAddress(wallet.address, current.address));
@@ -112,6 +120,24 @@ export default function VerifierNetwork() {
     document.addEventListener("keydown", onKey);
     return () => { document.removeEventListener("pointerdown", dismiss); document.removeEventListener("keydown", onKey); };
   }, [menu]);
+
+  // Prefill from the chain when an already-registered wallet opens the form.
+  //
+  // These two values are not the operator's to invent — they address a metadata
+  // object that already exists — and re-sending anything else silently replaces
+  // a correct pointer with a wrong one. Someone opening this to top up a stake
+  // should not have to retype them from memory to avoid breaking their own
+  // registration.
+  useEffect(() => {
+    if (!registerOpen || !selfRegistered) return;
+    const record = self.data;
+    if (!record) return;
+    setForm((previous) => ({
+      ...previous,
+      metadataHash: record.metadataHash,
+      metadataPointer: record.metadataPointer,
+    }));
+  }, [registerOpen, selfRegistered, self.data]);
 
   // Esc closes the operator drawer. It cannot ride the effect above, which
   // returns early whenever no popover is open — the drawer outlives every menu.
@@ -273,7 +299,32 @@ export default function VerifierNetwork() {
       <div className="network-layout"><section className="section-block verifier-directory"><div className="section-header"><div><div className="eyebrow">VERIFIER DIRECTORY</div><h2>Independent operators</h2></div><div className="topbar-anchor" data-menu-root><button className="quiet-button" onClick={() => setMenu(menu === "filters" ? null : "filters")}><SlidersHorizontal size={14} /> {statusFilter ? `Filters · ${activeFilter?.label ?? statusFilter}` : "Filters"}</button>{menu === "filters" && <div className="topbar-pop"><div className="topbar-pop-head"><span>Status</span><span>{items.length} shown</span></div><div className="topbar-pop-actions">{STATUS_FILTERS.map((option) => <button key={option.value || "all"} onClick={() => { setStatusFilter(option.value); setMenu(null); }}>{option.value === statusFilter ? <CheckCircle2 size={13} /> : <span className="pop-bullet" />}{option.label}</button>)}</div><p className="topbar-pop-note">Sent to the API as GET /v1/verifiers?status=…</p></div>}</div></div><div className="verifier-directory-list">{verifiers.isPending ? <VerifierRowsSkeleton rows={3} /> : items.length === 0 ? <EmptyStateBlock title={statusFilter ? "No verifiers match this filter" : "No verifiers registered yet"} actionLabel={statusFilter ? "Clear filter" : undefined} onAction={statusFilter ? () => setStatusFilter("") : undefined}>{statusFilter ? "Every registered operator is listed under “All verifiers”." : "Operators appear here once registerVerifier has been called and the indexer has recorded the VerifierRegistered log."}</EmptyStateBlock> : items.map((verifier) => <button className={`verifier-directory-row ${sameAddress(verifier.address, current?.address) ? "selected" : ""}`} key={verifier.address} onClick={() => { setSelectedAddress(verifier.address); setMenu(null); }}><VerifierAvatar address={verifier.address} /><div className="verifier-directory-main"><strong>{verifier.name}</strong><span title={toChecksumAddress(verifier.address) ?? verifier.address}>{verifier.shortAddress} · {modelLabel(verifier) ?? "no report revealed yet"}</span></div><div className="directory-stat"><span>AGREEMENT</span><strong>{percentLabel(verifier.agreementPct, 1) ?? "—"}</strong></div><div className="directory-stat"><span>UPTIME</span><strong>{percentLabel(verifier.uptimePct, 1) ?? "—"}</strong></div><div className={`directory-status ${statusTone(verifier.status)}`} title={`registered ${verifier.registered} · approved ${verifier.approved} · active ${verifier.active}${verifier.lastSeenAt ? ` · last reveal ${verifier.lastSeenAt}` : " · no reveal yet"}`}><span className="pill-dot" />{verifier.status}</div><ChevronDown size={16} className="row-chevron" /></button>)}</div></section></div>
       <section className="section-block verifier-events"><div className="section-header"><div><div className="eyebrow">NETWORK SIGNALS</div><h2>Latest verifier events</h2></div><span className="small-status" title={verifiers.error ? errorMessage(verifiers.error) : `GET /v1/verifiers every ${POLL_MS.verifiers / 1000}s — no event stream is open on this deployment`}><span className={`live-dot ${streamDot}`} />{streamLabel}</span></div><div className="signal-table"><div className="signal-head"><span>Event</span><span>Operator</span><span>Task</span><span>Time</span><span /></div>{verifiers.isPending ? <SignalRowsSkeleton rows={3} /> : events.length === 0 ? <EmptyStateBlock title="No verifier events yet">Commits, reveals and allow-list changes appear here as the indexer records the matching logs.</EmptyStateBlock> : events.map((event, index) => <button className="signal-row" key={`${event.taskId ?? "no-task"}-${event.at}-${event.label}-${index}`} disabled={!event.tx.explorerUrl} title={event.tx.explorerUrl ? `Open ${event.label} in the explorer — block ${event.tx.blockNumber ?? "?"}` : `No explorer is configured for chain ${ACTIVE_CHAIN_ID}`} onClick={() => { if (event.tx.explorerUrl) window.open(event.tx.explorerUrl, "_blank", "noopener,noreferrer"); }}><div><span className={`signal-icon signal-${event.tone}`}><Activity size={13} /></span><strong>{event.label}</strong></div><span>{event.operator}</span><span className="mono-text">{event.taskRef}</span><span className="muted-time" title={event.at}><Clock3 size={12} />{clockLabel(event.at)}</span><ArrowUpRight size={14} /></button>)}</div></section>
     </>}
-    {registerOpen && <div className="modal-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setRegisterOpen(false); }}><div className="modal-card"><div className="modal-head"><div><span className="eyebrow">Verifier registration</span><h2>Register, then wait for the allow-list.</h2></div><button className="icon-button" onClick={() => setRegisterOpen(false)}>×</button></div><p className="modal-copy">This signs <strong>registerVerifier(bytes32,string)</strong> against {PROOFRELAY_ADDRESS} and records your address, the canonical hash of your metadata object and the pointer to it. Registration alone does not put you to work: ProofRelay's MVP sybil defence is an admin allow-list, so a DEFAULT_ADMIN holder must still call setVerifierApproval(you, true) before the dispatcher assigns you a task. Until they do, the directory lists you as PENDING.</p><div className="form-grid"><label className="field full"><span>Metadata hash (bytes32)</span><input value={form.metadataHash} onChange={(event) => setForm({ ...form, metadataHash: event.target.value })} placeholder="0x… 32-byte canonical hash of the metadata object" spellCheck={false} autoComplete="off" /></label><label className="field full"><span>Metadata pointer{pointerLimit === null ? "" : ` (max ${pointerLimit} bytes)`}</span><input value={form.metadataPointer} onChange={(event) => setForm({ ...form, metadataPointer: event.target.value })} placeholder="local://… under the local driver, or the 0G Storage root" spellCheck={false} autoComplete="off" /></label><label className="field"><span>Stake to lock</span><div className="input-with-suffix"><input value={form.stake} onChange={(event) => setForm({ ...form, stake: event.target.value })} placeholder="0" inputMode="decimal" autoComplete="off" /><span>0G</span></div></label><label className="field"><span>Minimum stake</span><div className="field-static"><span>{minVerifierStake === null ? "reading params()…" : formatToken(minVerifierStake)}</span><ShieldCheck size={15} /></div></label></div>{wallet.isConnected && registerBlocker && <p className="modal-error">{registerBlocker}</p>}<div className="modal-foot"><span className="modal-note"><CheckCircle2 size={15} />{slashBps === null ? "Approval by an admin is required after registration" : slashBps === 0 ? "Slashing disabled (slashBps 0) · approval by an admin still required" : `Slash rate ${slashBps / 100}% · approval by an admin still required`}</span><button className="primary-button" onClick={submitRegistration} disabled={busy === "register"}>{busy === "register" ? "Signing…" : !wallet.isConnected ? "Connect wallet" : wallet.isWrongNetwork ? `Switch to ${NETWORK_NAME}` : "Register verifier"} <ArrowUpRight size={16} /></button></div></div></div>}
+    {registerOpen && <div className="modal-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setRegisterOpen(false); }}><div className="modal-card"><div className="modal-head"><div><span className="eyebrow">{selfRegistered ? "Verifier settings" : "Running a verifier"}</span><h2>{selfRegistered ? "Add stake, or replace your metadata." : "The worker registers itself."}</h2></div><button className="icon-button" onClick={() => setRegisterOpen(false)}>×</button></div>
+
+      {!selfRegistered ? <>
+        {/* No form for a wallet that has never registered. It used to get two
+            fields it had no way to fill: they address a metadata object that has
+            to exist in storage first, and paying for that upload needs a key a
+            browser does not hold. Asking anyway is not a small annoyance — it is
+            a dead end presented as a next step. */}
+        <p className="modal-copy">Registration is not something you do here. The verifier worker does it on its first run: it builds a metadata object out of your configuration, uploads it to storage, and calls <strong>registerVerifier(bytes32,string)</strong> with your own key. That upload is paid for by the key that signs it, which is why a browser cannot stand in for it.</p>
+        <ol className="modal-steps">
+          <li><strong>Configure.</strong> Copy <code>.env.verifier-standalone.example</code> to <code>.env</code>, then fill in your signing key and a 0G Compute credential. Everything network-shaped defaults from <code>CHAIN_ID</code>.</li>
+          <li><strong>Fund the key.</strong> About 0.0025 0G per task, so 0.1 0G covers roughly forty. There is no faucet on mainnet.</li>
+          <li><strong>Run it once.</strong> Watch for <code>registered verifier</code> in the log with a transaction hash. The directory will list you as PENDING.</li>
+          <li><strong>Ask for approval.</strong> This MVP's sybil defence is an allow-list, so a DEFAULT_ADMIN holder must call <strong>setVerifierApproval(you, true)</strong>. Nothing in the protocol lets an operator approve itself, and that is deliberate.</li>
+        </ol>
+        <div className="modal-foot"><span className="modal-note"><CheckCircle2 size={15} />{wallet.isConnected ? "This wallet is not registered yet" : "No wallet needed to read this"}</span><a className="primary-button" href="https://github.com/nodesproof/proofrelay/blob/main/docs/VERIFIER_OPERATOR.md" target="_blank" rel="noopener noreferrer">Verifier operator guide <ExternalLink size={16} /></a></div>
+      </> : <>
+        {/* Registered already. registerVerifier is idempotent and is also the
+            only update path, so the same call now means something else — and the
+            two things it does are easy to trigger by accident. */}
+        <p className="modal-copy">Your address is already registered, so this call no longer creates anything. Sending it again does two things: the stake below is <strong>added</strong> to what you have locked, and the metadata hash and pointer <strong>replace</strong> what is recorded on chain. Both fields are filled in with your current values, so leaving them alone changes only the stake.</p>
+        <div className="form-grid"><label className="field full"><span>Metadata hash (bytes32)</span><input value={form.metadataHash} onChange={(event) => setForm({ ...form, metadataHash: event.target.value })} placeholder="0x… 32-byte canonical hash of the metadata object" spellCheck={false} autoComplete="off" /></label><label className="field full"><span>Metadata pointer{pointerLimit === null ? "" : ` (max ${pointerLimit} bytes)`}</span><input value={form.metadataPointer} onChange={(event) => setForm({ ...form, metadataPointer: event.target.value })} placeholder="local://… under the local driver, or the 0G Storage root" spellCheck={false} autoComplete="off" /></label><label className="field"><span>Stake to add</span><div className="input-with-suffix"><input value={form.stake} onChange={(event) => setForm({ ...form, stake: event.target.value })} placeholder="0" inputMode="decimal" autoComplete="off" /><span>0G</span></div></label><label className="field"><span>Currently locked</span><div className="field-static"><span>{self.data ? formatToken(self.data.stake) : "reading getVerifier()…"}</span><ShieldCheck size={15} /></div></label></div>
+        {wallet.isConnected && registerBlocker && <p className="modal-error">{registerBlocker}</p>}
+        <div className="modal-foot"><span className="modal-note"><CheckCircle2 size={15} />{slashBps === null ? "Approval by an admin is required after registration" : slashBps === 0 ? "Slashing disabled (slashBps 0)" : `Slash rate ${slashBps / 100}%`}</span><button className="primary-button" onClick={submitRegistration} disabled={busy === "register"}>{busy === "register" ? "Signing…" : !wallet.isConnected ? "Connect wallet" : wallet.isWrongNetwork ? `Switch to ${NETWORK_NAME}` : "Submit"} <ArrowUpRight size={16} /></button></div>
+      </>}
+    </div></div>}
         {/* The operator panel. It used to be an <aside> pinned in the grid, always
         showing items[0] whether or not anyone had asked for it, with its onchain
         status and its four write actions hidden behind a 252px "…" dropdown.

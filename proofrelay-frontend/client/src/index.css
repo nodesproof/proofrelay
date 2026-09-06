@@ -626,3 +626,26 @@ button.signal-row:disabled { opacity: .72; }
    clip a child element, so without it the pattern renders as a square. */
 .identicon-avatar { overflow: hidden; padding: 0; font-size: 0; line-height: 0; }
 .identicon-avatar > svg { display: block; }
+
+/* Inline links inside modal prose. The base reset gives an anchor nothing but a
+   cursor, and colour only on :hover — so a link sitting in a paragraph was
+   invisible until the mouse happened to cross it, and invisible to anyone
+   navigating by keyboard or reading on a touch screen. */
+.modal-copy a { display: inline-flex; align-items: center; gap: 5px; color: #4f6d32; font-weight: 650; text-decoration: underline; text-underline-offset: 2px; }
+.modal-copy a:hover { color: #3d5726; }
+.modal-copy a svg { flex: 0 0 auto; }
+
+/* The numbered path in the verifier-registration modal. The unregistered branch
+   has no form to fill, so it carries prose and steps instead — and prose that
+   long only reads as instructions if the steps are actually numbered. */
+/* `list-style: decimal` is restated because Tailwind Preflight resets every
+   list to none, which silently turned the numbers off and left ::marker below
+   styling something that was not being drawn. */
+.modal-steps { margin: 16px 0 0; padding-left: 22px; list-style: decimal outside; display: flex; flex-direction: column; gap: 11px; color: #5b665f; font-size: 13px; line-height: 1.6; }
+.modal-steps li { display: list-item; }
+.modal-steps li::marker { color: #5b7533; font-weight: 700; }
+.modal-steps strong { color: #29352f; }
+.modal-steps code { padding: 1px 5px; border-radius: 4px; background: #eceade; color: #45543f; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+/* The guide link is the primary action on that branch, so it is an <a> wearing
+   the button's clothes — `.primary-button` assumes a <button> box. */
+a.primary-button { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; }
