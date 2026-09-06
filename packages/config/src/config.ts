@@ -42,6 +42,7 @@ export interface ComputeConfig {
   rpcUrl: string;
   timeoutMs: number;
   maxAttempts: number;
+  maxTokens: number;
   seed: number;
   verifyTee: boolean;
   trustMode: string | undefined;
@@ -235,6 +236,10 @@ export function loadConfig(): Config {
       // provider's attestation, on top of generation time.
       timeoutMs: envInt("COMPUTE_TIMEOUT_MS", 90_000),
       maxAttempts: envInt("COMPUTE_MAX_ATTEMPTS", 3),
+      // Bounds reasoning and answer together, so a thinking model needs far
+      // more than a direct one. See COMPUTE_MAX_TOKENS in the standalone
+      // example for the measurement behind this default.
+      maxTokens: envInt("COMPUTE_MAX_TOKENS", 2048),
       seed: envInt("COMPUTE_SEED", 1337),
       verifyTee: envBool("COMPUTE_VERIFY_TEE", true),
       trustMode: env("COMPUTE_TRUST_MODE") ?? "verified",

@@ -33,6 +33,15 @@ export interface LlmComputeOptions {
   evidenceDepth: number;
   supportThreshold: number;
   seed?: number;
+  /**
+   * Ceiling on completion tokens. It bounds reasoning AND answer together, so a
+   * reasoning model can spend the whole budget thinking and return empty
+   * content — which is how hy4-preview failed on mainnet task 0x142f4f1b…,
+   * having burned 398 of 455 completion tokens on reasoning for a single
+   * trivial claim. 2048 is ample for a model that answers directly and far too
+   * little for one that thinks first.
+   */
+  maxTokens?: number;
   /** Ask the router to verify the provider's TEE attestation synchronously. */
   verifyTee?: boolean;
   /** `standard` | `verified` | `private`. A floor, not an exact match. */
@@ -256,7 +265,7 @@ export class LlmComputeAdapter implements ComputeAdapter {
             temperature: 0,
             top_p: 1,
             seed: this.options.seed ?? 1337,
-            max_tokens: 2048,
+            max_tokens: this.options.maxTokens ?? 2048,
             response_format: { type: "json_object" },
             ...(this.options.verifyTee ? { verify_tee: true } : {}),
           }),
@@ -303,7 +312,28 @@ export class LlmComputeAdapter implements ComputeAdapter {
         }
         const content = payload.choices?.[0]?.message?.content;
         if (!content) {
-          throw new ProofRelayError("COMPUTE_INVALID_OUTPUT", "no completion content returned");
+          // Say which empty this is. A reasoning model that overruns the token
+          // ceiling returns finish_reason "length" with all of the budget spent
+          // on reasoning and nothing left for the answer — a different problem
+          // from a provider that returned nothing at all, and the only one an
+          // operator can fix (COMPUTE_MAX_TOKENS).
+          const choice = payload.choices?.[0] as
+            | { finish_reason?: string; message?: { reasoning_content?: string } }
+            | undefined;
+          const usage = (payload as { usage?: { completion_tokens?: number; completion_tokens_details?: { reasoning_tokens?: number } } }).usage;
+          const reasoningTokens = usage?.completion_tokens_details?.reasoning_tokens;
+          const spentOnReasoning =
+            choice?.finish_reason === "length" ||
+            (reasoningTokens !== undefined && reasoningTokens > 0);
+          throw new ProofRelayError(
+            "COMPUTE_INVALID_OUTPUT",
+            spentOnReasoning
+              ? `${this.options.model} returned no answer: it spent ${reasoningTokens ?? "all"} of ` +
+                `${usage?.completion_tokens ?? "its"} completion tokens on reasoning and hit the ` +
+                `max_tokens ceiling of ${this.options.maxTokens ?? 2048}. Raise COMPUTE_MAX_TOKENS, ` +
+                "or use a model that answers without a reasoning pass."
+              : "no completion content returned",
+          );
         }
         return content;
       },

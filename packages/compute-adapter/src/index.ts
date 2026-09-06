@@ -52,6 +52,7 @@ export function createComputeAdapter(
       model: config.model,
       timeoutMs: config.timeoutMs,
       maxAttempts: config.maxAttempts,
+      maxTokens: config.maxTokens,
       evidenceDepth,
       supportThreshold,
       seed: config.seed,

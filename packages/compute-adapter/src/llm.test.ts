@@ -339,6 +339,27 @@ describe("LlmComputeAdapter degradedReason", () => {
     expect(out.trace.degradedReason).toContain("fetch failed");
   });
 
+  /**
+   * The shape a reasoning model returns when the ceiling bounds its thinking
+   * rather than its answer. "no completion content returned" was true and
+   * useless: it reads as a broken provider, and sent an operator to check their
+   * key and their network for an hour when the fix was one number.
+   */
+  it("says the budget went to reasoning when the answer is empty", async () => {
+    vi.stubGlobal("fetch", async () =>
+      new Response(
+        JSON.stringify({
+          choices: [{ finish_reason: "length", message: { content: "", reasoning_content: "thinking…" } }],
+          usage: { completion_tokens: 2048, completion_tokens_details: { reasoning_tokens: 2048 } },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    const out = await new LlmComputeAdapter(OPTIONS).scoreEvidence(INPUT);
+    expect(out.trace.degradedReason).toContain("COMPUTE_MAX_TOKENS");
+    expect(out.trace.degradedReason).toContain("reasoning");
+  });
+
   it("leaves the field off a report that did not degrade", async () => {
     routerReturning({ results: [{ claimId: "claim-001", verdict: "SUPPORTED", confidence: 0.8, spanIndexes: [0] }] });
     const out = await new LlmComputeAdapter(OPTIONS).scoreEvidence(INPUT);
