@@ -27,26 +27,37 @@ const chain = new ChainClient({
   confirmations: 1,
 });
 
-// Claims both pipelines should agree on, so the settlement exercises the
-// consensus path rather than the conflict rate.
+/**
+ * A real page, fetched and snapshotted by the API — not text pasted inline.
+ *
+ * `sources` accepts a URL string, `{uri}`, or `{inlineText, label}`. This used
+ * to use the third form with a docs.0g.ai label, which reads like a citation and
+ * is not one: the fetch and snapshot path is skipped entirely, so the test
+ * proves nothing about the part most likely to break, and the report cites a URL
+ * whose content nobody can check against what was actually scored.
+ *
+ * semver.org because it is short, stable, normative, and — unlike everything
+ * else this repo tests with — not about 0G. A verification market that only ever
+ * verifies its own chain's documentation has not been tested on anything.
+ *
+ * Two claims, and the second is deliberately FALSE: the page assigns that rule
+ * to MINOR, not MAJOR. That is the more useful shape. All four verifiers return
+ * CONTRADICTED and the task still settles CONSENSUS, so this exercises
+ * refutation and settlement in one run rather than only agreement. It also
+ * guards a real regression: the offline scorer used to answer this SUPPORTED,
+ * because the claim overlaps the source almost word for word.
+ */
 const body = {
   // Unauthenticated callers name the creator explicitly; a browser proves it
   // with a SIWE session instead. Either way the manifest records who asked.
   creator: chain.account,
-  title: "0G Storage standalone availability",
-  question: "Is 0G Storage usable without a blockchain integration?",
+  title: "Semantic Versioning increment rules",
+  question: "Under Semantic Versioning 2.0.0, which version component is incremented for which kind of change?",
   claims: [
-    "0G Storage can be used standalone without any blockchain integration.",
-    "0G Storage provides client libraries in Go and TypeScript.",
+    "Under Semantic Versioning, the PATCH version is incremented when you make backward compatible bug fixes.",
+    "Under Semantic Versioning, the MAJOR version is incremented when you add functionality in a backward compatible manner.",
   ],
-  sources: [
-    {
-      inlineText:
-        "0G Storage can be used completely standalone without any blockchain integration.\n" +
-        "Store and retrieve massive datasets with Go and TypeScript client libraries.",
-      label: "https://docs.0g.ai/introduction/understanding-0g",
-    },
-  ],
+  sources: ["https://semver.org/"],
   verifierCount,
   commitWindowSec: windowSec,
   revealWindowSec: windowSec,
