@@ -67,11 +67,63 @@ describe("screenSnapshots", () => {
   /**
    * A key is different: copying it into content-addressed storage is the harm,
    * whoever published it first, and no takedown reaches an object addressed by
-   * its own hash.
+   * its own hash. The SOURCE is refused — never the request.
    */
-  it("refuses a page carrying a private key", () => {
+  it("blocks the source that carries a private key", () => {
     const key = `-----BEGIN PRIVATE KEY-----\n${"MIIEvQIBADAN".repeat(8)}\n-----END PRIVATE KEY-----`;
-    expect(() => screenSnapshots([snapshot(key)])).toThrow(/personal data/i);
+    const result = screenSnapshots([snapshot(key, "src-003")]);
+    expect(result.blocked.has("src-003")).toBe(true);
+  });
+
+  /**
+   * The first cut threw for the whole prepare call, which fails its own
+   * argument: PEM_PRIVATE_KEY matches a bare header line, so RFC 7468 and every
+   * TLS tutorial were blocking; SSN_FORMATTED fires on the shape, so an
+   * encyclopedia page about social security numbers was blocking. Those pages
+   * are as ordinary as contact addresses on the standards web.
+   */
+  it("never throws for a fetched page, whatever it carries", () => {
+    const pages = [
+      "The following is an example:\n-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBg\n-----END PRIVATE KEY-----",
+      "The most misused SSN of all time was 078-05-1120, printed in wallets sold in 1938.",
+      "Use the test card number 4242 4242 4242 4242 with any future expiry.",
+    ];
+    for (const page of pages) {
+      expect(() => screenSnapshots([snapshot(page)])).not.toThrow();
+      expect(screenSnapshots([snapshot(page)]).blocked.size).toBe(1);
+    }
+  });
+
+  /** Blocking one source must not take the clean ones down with it. */
+  it("blocks only the source that carries it", () => {
+    const result = screenSnapshots([
+      snapshot("The most specific match found MUST be used.", "src-000"),
+      snapshot("card 4242 4242 4242 4242", "src-001"),
+    ]);
+    expect([...result.blocked]).toEqual(["src-001"]);
+  });
+
+  /**
+   * Headers ride to permanent storage with the body and are attacker-controlled
+   * — `etag` and `x-proofrelay-final-url` are whatever the origin returned.
+   */
+  it("screens the headers, not just the body", () => {
+    const withHeader = {
+      ...snapshot("a completely ordinary page about nothing in particular"),
+      headers: { etag: "-----BEGIN PRIVATE KEY-----" },
+    };
+    expect(screenSnapshots([withHeader]).blocked.size).toBe(1);
+  });
+
+  /**
+   * One 512 KiB body measured 294ms, and prepare takes twenty of them on an
+   * unauthenticated route. The screen reads a prefix and says that it did.
+   */
+  it("reads a bounded prefix and records that it stopped", () => {
+    const long = `${"harmless prose. ".repeat(6000)} contact bob@example.org`;
+    const result = screenSnapshots([snapshot(long)]);
+    expect(result.warnings.join(" ")).toMatch(/first \d+ bytes/);
+    expect(result.publicDataOnly).toBe(true);
   });
 
   it("screens every source, not just the first", () => {

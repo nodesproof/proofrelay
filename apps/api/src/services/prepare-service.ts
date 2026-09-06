@@ -146,6 +146,16 @@ function rejectPersonalData(screen: PersonalDataScreen): never {
  * number or a national id is a different thing: copying it into permanent
  * content-addressed storage is the harm, whoever published it first, and no
  * later takedown reaches an object that is addressed by its own hash.
+ *
+ * What is refused is the SOURCE, never the request. The first cut of this threw
+ * `PERSONAL_DATA_REJECTED` for the whole prepare call, which fails the same
+ * argument it makes above: `PEM_PRIVATE_KEY` matches a bare header line, so
+ * RFC 7468 and every TLS tutorial are blocking; `SSN_FORMATTED` fires on the
+ * shape, so an encyclopedia page about social security numbers is blocking; a
+ * documented test card number is blocking. Those are as ordinary on the
+ * standards web as contact addresses. Killing the request also broke the
+ * property stated at the top of this file — a bad source does not fail
+ * preparation — and blamed a creator who typed nothing wrong.
  */
 const SNAPSHOT_BLOCKING_KINDS: ReadonlySet<PersonalDataKind> = new Set([
   "private-key",
@@ -155,6 +165,19 @@ const SNAPSHOT_BLOCKING_KINDS: ReadonlySet<PersonalDataKind> = new Set([
 
 /** Enough to characterise a page; not a second copy of it. */
 const MAX_REDACTION_NOTES = 32;
+
+/**
+ * How much of each fetched body is screened.
+ *
+ * The whole body was: `screenForPersonalData` over one 512 KiB source measured
+ * 294ms, and `/v1/tasks/prepare` takes twenty of them and needs no session — so
+ * a single caller could hold the event loop for ~3.7s per request, inside a
+ * bucket that allows ten a minute, in the one Fastify process that also serves
+ * every read the web app polls. A prefix answers the question this screen is
+ * actually asking — "what kind of page is this" — at a bounded cost, and the
+ * manifest says when it stopped looking.
+ */
+const SCREEN_PREFIX_BYTES = 64 * 1024;
 
 /**
  * Screens the bytes that were actually fetched, and reports what it found.
@@ -173,17 +196,27 @@ const MAX_REDACTION_NOTES = 32;
  */
 export function screenSnapshots(snapshots: readonly SourceSnapshot[]): {
   publicDataOnly: boolean;
+  /** sourceIds whose bytes must not be published at all. */
+  blocked: Set<string>;
   redactions: string[];
   warnings: string[];
 } {
   const fields: Record<string, string> = {};
+  let truncated = false;
   for (const snapshot of snapshots) {
-    if (snapshot.text) fields[`${snapshot.sourceId} ${snapshot.uri}`] = snapshot.text;
+    const label = `${snapshot.sourceId} ${snapshot.uri}`;
+    if (snapshot.text) {
+      if (snapshot.text.length > SCREEN_PREFIX_BYTES) truncated = true;
+      fields[label] = snapshot.text.slice(0, SCREEN_PREFIX_BYTES);
+    }
+    // Headers are uploaded with the body and are attacker-controlled: `etag`
+    // and `x-proofrelay-final-url` are whatever the origin returned. A body
+    // that screened clean while its headers carried a key would have gone to
+    // permanent storage under `publicDataOnly: true`.
+    const headers = Object.values(snapshot.headers ?? {}).join(" \n");
+    if (headers) fields[`${label} headers`] = headers.slice(0, SCREEN_PREFIX_BYTES);
   }
   const screen = screenForPersonalData(fields);
-
-  const blocking = screen.matches.filter((match) => SNAPSHOT_BLOCKING_KINDS.has(match.kind));
-  if (blocking.length > 0) rejectPersonalData({ ok: false, matches: blocking, warnings: screen.warnings });
 
   const notes: string[] = [];
   for (const match of screen.matches) {
@@ -196,10 +229,22 @@ export function screenSnapshots(snapshots: readonly SourceSnapshot[]): {
     notes.push(`… and ${screen.matches.length - notes.length} more matches not listed`);
   }
 
+  const warnings = [...screen.warnings];
+  if (truncated) {
+    warnings.push(
+      `personal-data screening read the first ${SCREEN_PREFIX_BYTES} bytes of each source, not the whole body`,
+    );
+  }
+
   return {
     publicDataOnly: screen.matches.length === 0,
+    blocked: new Set(
+      screen.matches
+        .filter((match) => SNAPSHOT_BLOCKING_KINDS.has(match.kind))
+        .map((match) => match.field.split(" ")[0]!),
+    ),
     redactions: notes,
-    warnings: screen.warnings,
+    warnings,
   };
 }
 
@@ -323,7 +368,20 @@ export async function prepareTask(
   const manifestSources: ManifestSource[] = [];
   const responseSources: PrepareTaskResponse["sources"] = [];
 
-  for (const snapshot of snapshots) {
+  for (const original of snapshots) {
+    // A source carrying a key, a card number or a national id is recorded as
+    // REJECTED with its bytes dropped, exactly as an unreachable one is. The
+    // task still prepares; the manifest still accounts for the source; nothing
+    // that must not be republished is uploaded.
+    const snapshot = fetched.blocked.has(original.sourceId)
+      ? {
+          ...original,
+          status: "REJECTED" as const,
+          text: "",
+          byteLength: 0,
+          error: "the source carries data that must not be republished",
+        }
+      : original;
     const stored = await uploadSnapshot(ctx, snapshot);
     const source: ManifestSource = {
       sourceId: snapshot.sourceId,
@@ -519,6 +577,7 @@ export async function prepareChallenge(
       taskId,
       challenger,
       redactions: fetchedScreen.redactions.length,
+      blocked: [...fetchedScreen.blocked],
     });
   }
 
@@ -526,7 +585,16 @@ export async function prepareChallenge(
   // addresses have to exist somewhere: each snapshot is stored before its hash
   // is quoted, including the ones that came back empty because the host was down.
   const additionalEvidence: ChallengeEvidence["additionalEvidence"] = [];
-  for (const [index, snapshot] of snapshots.entries()) {
+  for (const [index, original] of snapshots.entries()) {
+    const snapshot = fetchedScreen.blocked.has(original.sourceId)
+      ? {
+          ...original,
+          status: "REJECTED" as const,
+          text: "",
+          byteLength: 0,
+          error: "the source carries data that must not be republished",
+        }
+      : original;
     await uploadSnapshot(ctx, snapshot);
     if (snapshot.status !== "OK" && snapshot.status !== "TRUNCATED") {
       ctx.logger?.warn("challenge evidence source is not OK", {
