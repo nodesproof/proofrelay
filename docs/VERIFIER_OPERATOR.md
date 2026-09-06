@@ -56,9 +56,14 @@ Or without Docker, from a checkout with Node 22:
 
 ```bash
 npm ci -w workers/verifier --include-workspace-root
-npx tsc -b workers/verifier
+npm run build:verifier
 node workers/verifier/dist/main.js
 ```
+
+That install deliberately omits the API's dependencies, so `npm run build` —
+which builds every workspace — will fail here on missing `fastify` and `pg`.
+Nothing is wrong: a verifier never talks to the API. Use `build:verifier`, and
+run it again after every `git pull`.
 
 On first start the worker calls `registerVerifier` with your key. Watch for
 `registered verifier` in the log with a transaction hash.
