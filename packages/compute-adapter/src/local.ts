@@ -1,5 +1,5 @@
 import { objectHash } from "@proofrelay/schemas";
-import { judge, scoreSpan, splitSpans, tokenize } from "./entailment.js";
+import { type FallbackReason, judge, scoreSpan, splitSpans, tokenize } from "./entailment.js";
 import type {
   ClaimExtractionInput,
   ClaimScoringResult,
@@ -128,8 +128,8 @@ export function scoreClaim(
   corpus: EvidenceScoringInput["corpus"],
   depth: number,
   supportThreshold: number,
-  /** Standing in for a model rather than serving as the chosen engine. */
-  conservative = false,
+  /** Standing in for a model rather than serving as the chosen engine, and why. */
+  conservative: FallbackReason | false = false,
 ): ClaimScoringResult {
   const perSource: EvidenceSpanResult[] = [];
 

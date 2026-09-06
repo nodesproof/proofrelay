@@ -271,6 +271,31 @@ export interface Judgement {
  * The curves are deliberately conservative: nothing reaches 1.0, and a claim
  * that fails the threshold cannot look confident.
  */
+/**
+ * Why a claim fell back to lexical scoring.
+ *
+ * Named rather than boolean because the reason is published, in the report the
+ * verifier anchors onchain. The first version of this said "the compute call
+ * failed" for every fallback, which is true of only one of the four: the other
+ * three happen when the model DID answer and the driver refused the row. On
+ * mainnet task 0xe95f50b2… a verifier scored one claim with its model and fell
+ * back on the other, and the artifact blamed a call that had plainly worked.
+ * An evidence market cannot publish the wrong reason for its own degradation.
+ */
+export type FallbackReason =
+  | "call-failed"
+  | "unusable-verdict"
+  | "unusable-citations"
+  | "unusable-confidence";
+
+const FALLBACK_CAUSE: Record<FallbackReason, string> = {
+  "call-failed": "the compute call failed",
+  "unusable-verdict": "the model answered with a verdict outside the three this pipeline accepts",
+  "unusable-citations":
+    "the model cited a span that does not exist, or asserted a verdict while citing none",
+  "unusable-confidence": "the model returned a confidence that is not a number between 0 and 1",
+};
+
 export function judge(args: {
   claim: string;
   bestSpan: string;
@@ -292,7 +317,7 @@ export function judge(args: {
    * entailment, and a fallback that cannot tell them apart should say so rather
    * than guess in the confident direction.
    */
-  conservative?: boolean;
+  conservative?: FallbackReason | false;
 }): Judgement {
   const { claim, bestSpan, bestScore, supportThreshold, conservative = false } = args;
   const facts = compareFacts(claim, bestSpan);
@@ -337,7 +362,7 @@ export function judge(args: {
       confidence: round(0.25 + bestScore / 3),
       reasoningSummary:
         `The closest span scores ${bestScore.toFixed(2)}, above this pipeline's support threshold of ` +
-        `${supportThreshold.toFixed(2)}, but no model weighed it: the compute call failed and this ` +
+        `${supportThreshold.toFixed(2)}, but no model weighed it: ${FALLBACK_CAUSE[conservative]}, so this ` +
         "verdict comes from lexical scoring alone, which cannot tell a matching sentence from an " +
         "entailing one. Reported as insufficient rather than asserted as support.",
     };

@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { ProofRelayError, objectHash, withRetry } from "@proofrelay/schemas";
-import { compareFacts, scoreSpan, splitSpans } from "./entailment.js";
+import { compareFacts, type FallbackReason, scoreSpan, splitSpans } from "./entailment.js";
 import { LocalComputeAdapter, PIPELINE_VERSION, scoreClaim } from "./local.js";
 import type {
   ClaimExtractionInput,
@@ -472,7 +472,7 @@ export class LlmComputeAdapter implements ComputeAdapter {
         const valid = verdict === "SUPPORTED" || verdict === "CONTRADICTED" || verdict === "INSUFFICIENT_EVIDENCE";
         if (!row || !valid) {
           // This claim alone degrades; the rest of the report still stands.
-          return scoreClaim(claim, input.corpus, depth, threshold, true);
+          return scoreClaim(claim, input.corpus, depth, threshold, "unusable-verdict");
         }
         // Fail closed, per claim. Substituting for an invalid answer turned a
         // hallucination into a confident published fact: an out-of-range span
@@ -490,13 +490,13 @@ export class LlmComputeAdapter implements ComputeAdapter {
         // INSUFFICIENT_EVIDENCE is coherent with no citation at all.
         const citationRequired = verdict !== "INSUFFICIENT_EVIDENCE";
         if (!indexesUsable || (citationRequired && rawIndexes.length === 0)) {
-          return scoreClaim(claim, input.corpus, depth, threshold, true);
+          return scoreClaim(claim, input.corpus, depth, threshold, "unusable-citations");
         }
         const cited = rawIndexes.map((index) => spans[index]!).slice(0, depth);
 
         const raw = Number(row.confidence);
         if (!Number.isFinite(raw) || raw < 0 || raw > 1) {
-          return scoreClaim(claim, input.corpus, depth, threshold, true);
+          return scoreClaim(claim, input.corpus, depth, threshold, "unusable-confidence");
         }
         const confidence = raw;
         const reasoning = typeof row.reasoning === "string" ? row.reasoning.trim() : "";
@@ -512,7 +512,9 @@ export class LlmComputeAdapter implements ComputeAdapter {
     } catch {
       degraded = true;
       attempts = this.options.maxAttempts;
-      results = input.claims.map((claim) => scoreClaim(claim, input.corpus, depth, threshold, true));
+      results = input.claims.map((claim) =>
+        scoreClaim(claim, input.corpus, depth, threshold, "call-failed"),
+      );
       // The trace must not describe a response we threw away. `router` is
       // assigned before the completion is parsed, so a refusal or truncated JSON
       // left `tee_verified`, `request_id` and `provider` on the trace of a report
