@@ -243,6 +243,45 @@ describe("LlmComputeAdapter prompt", () => {
   });
 });
 
+describe("LlmComputeAdapter prompt: verdicts and confidence", () => {
+  async function systemPrompt(): Promise<string> {
+    const captured = routerReturning({ results: [] });
+    await new LlmComputeAdapter(OPTIONS).scoreEvidence(INPUT);
+    const body = JSON.parse(captured.bodies[0]!) as { messages: { role: string; content: string }[] };
+    return body.messages.find((m) => m.role === "system")!.content;
+  }
+
+  /**
+   * The instruction used to read "SUPPORT the claim, CONTRADICT it" — verbs,
+   * where the JSON needs participles — and the driver then refused the
+   * CONTRADICT it had just taught, dropping the claim to the offline scorer.
+   * qwen3-vl-30b reproduced it on demand.
+   */
+  it("names the three verdicts exactly as the parser expects them", async () => {
+    const prompt = await systemPrompt();
+    expect(prompt).toContain("SUPPORTED, CONTRADICTED, INSUFFICIENT_EVIDENCE");
+    // The bare verbs must not appear as a value the model could copy.
+    expect(prompt).not.toMatch(/\bSUPPORT\b(?!ED)/);
+    expect(prompt).not.toMatch(/\bCONTRADICT\b(?!ED)/);
+  });
+
+  /**
+   * The example carried "confidence":0.0 — the one value that puts an asserting
+   * verdict under the 0.55 consensus floor. A model that copies the shape
+   * published correct verdicts worth nothing, and its verifier earned nothing,
+   * with no visible sign anything was wrong. qwen3-vl-30b returned 0 for every
+   * claim until the example changed.
+   */
+  it("shows a confidence the model can copy without voiding its own vote", async () => {
+    const prompt = await systemPrompt();
+    const shown = /"confidence":([0-9.]+)/.exec(prompt);
+    expect(shown).not.toBeNull();
+    expect(Number(shown![1])).toBeGreaterThan(0.55);
+    // And says it in words, so the value is a judgement rather than a template.
+    expect(prompt).toMatch(/how certain YOU are/);
+  });
+});
+
 describe("LlmComputeAdapter output validation", () => {
   async function verdictFor(row: Record<string, unknown>) {
     routerReturning({ results: [{ claimId: "claim-001", ...row }] });
