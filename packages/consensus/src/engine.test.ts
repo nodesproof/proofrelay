@@ -312,6 +312,45 @@ describe("claim agreement", () => {
   });
 });
 
+describe("abstention needs no citation", () => {
+  /**
+   * Mainnet task 0xec3b19e5…: four verifiers returned INSUFFICIENT_EVIDENCE on
+   * a claim the sources genuinely do not support — the system declining to
+   * assert something false, which is the behaviour this market sells — and the
+   * task settled CONFLICT for "only 0/4 agreeing verifiers cited any evidence".
+   * The contract then paid everyone who revealed, including a verifier that had
+   * scored the whole report offline.
+   *
+   * There is no span that demonstrates an absence. The driver already knows
+   * this (llm.ts requires citations only for an asserting verdict) and so does
+   * `clearsFloor`; the evidence gate was the one place that did not.
+   */
+  it("settles a claim every verifier abstains on with nothing cited", () => {
+    const result = evaluate([
+      report(VERIFIER_A, [{ claimId: "claim-001", verdict: "INSUFFICIENT_EVIDENCE", confidence: 0, sources: [] }]),
+      report(VERIFIER_B, [{ claimId: "claim-001", verdict: "INSUFFICIENT_EVIDENCE", confidence: 0.95, sources: [] }]),
+    ]);
+
+    expect(result.outcome).toBe("CONSENSUS");
+    const claim = result.claims[0]!;
+    expect(claim.agreed).toBe(true);
+    expect(claim.majorityVerdict).toBe("INSUFFICIENT_EVIDENCE");
+    expect(claim.evidenceCoverage).toBe(0);
+    expect(claim.reason).toBe("2 verifiers agree that the sources do not settle this claim");
+  });
+
+  /** The exemption is for abstention only: an assertion still has to cite. */
+  it("still refuses an asserting verdict that cites nothing", () => {
+    const result = evaluate([
+      report(VERIFIER_A, [{ claimId: "claim-001", verdict: "SUPPORTED", confidence: 0.9, sources: [] }]),
+      report(VERIFIER_B, [{ claimId: "claim-001", verdict: "SUPPORTED", confidence: 0.9, sources: [] }]),
+    ]);
+
+    expect(result.claims[0]!.agreed).toBe(false);
+    expect(result.conflicts[0]).toContain("cited any evidence");
+  });
+});
+
 describe("quorum", () => {
   it("returns NO_QUORUM when fewer reports were revealed than the rule requires", () => {
     const result = evaluate([

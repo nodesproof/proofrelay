@@ -182,9 +182,25 @@ function consensusForVotes(
   const contradicted = opinions.filter((vote) => vote.verdict === "CONTRADICTED").length;
   const criticalConflict = supported > 0 && contradicted > 0;
 
+  // An abstention is the one verdict coherent without a citation: it says the
+  // snapshot does not settle the claim, and no span demonstrates an absence.
+  // The driver already encodes this — llm.ts requires citations only for an
+  // asserting verdict — and `clearsFloor` above makes the matching exemption
+  // for the confidence floor. The evidence gate did not, so the three rules
+  // disagreed and a claim every verifier honestly abstained on could never
+  // agree: it dragged its whole task to CONFLICT.
+  //
+  // Mainnet task 0xec3b19e5… is the case. Four verifiers returned
+  // INSUFFICIENT_EVIDENCE on a claim the sources genuinely do not support —
+  // the system refusing to assert something false, which is the behaviour this
+  // market exists to sell — and the recorded reason was "only 0/4 agreeing
+  // verifiers cited any evidence". The contract then applied conflictRateBps to
+  // everyone who revealed, paying a verifier that had scored the whole report
+  // offline exactly what it paid the four that ran real inference.
+  const abstained = verdict === ABSTENTION;
   const enoughAgreement = agreeingVerifiers.length >= rule.requiredAgreement;
-  const enoughCoverage = evidenceCoverage >= rule.minimumEvidenceCoverage;
-  const enoughOverlap = evidenceOverlap >= rule.minimumEvidenceOverlap;
+  const enoughCoverage = abstained || evidenceCoverage >= rule.minimumEvidenceCoverage;
+  const enoughOverlap = abstained || evidenceOverlap >= rule.minimumEvidenceOverlap;
   const agreed = enoughAgreement && enoughCoverage && enoughOverlap && !criticalConflict;
 
   return {
