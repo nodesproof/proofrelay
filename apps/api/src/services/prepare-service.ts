@@ -42,7 +42,11 @@ import {
   type SourceSnapshot,
 } from "@proofrelay/schemas";
 import { fetchSources as defaultFetchSources, type FetchOptions, type SourceInput } from "../fetcher/source-fetcher.js";
-import { screenForPersonalData, type PersonalDataScreen } from "../fetcher/safety.js";
+import {
+  screenForPersonalData,
+  type PersonalDataKind,
+  type PersonalDataScreen,
+} from "../fetcher/safety.js";
 import type { Logger } from "../observability.js";
 
 /* ── context ─────────────────────────────────────────────────────────────── */
@@ -129,6 +133,74 @@ function rejectPersonalData(screen: PersonalDataScreen): never {
       },
     },
   );
+}
+
+/**
+ * Kinds whose permanent republication is itself the injury.
+ *
+ * A fetched page is a third party's already-published document, not something
+ * the creator wrote. Refusing every page that carries a contact address would
+ * refuse most of the standards web — RFC 9309, which this project uses as a
+ * test source, names four addresses in its own acknowledgements. So an address
+ * or a phone number is recorded rather than refused. A private key, a card
+ * number or a national id is a different thing: copying it into permanent
+ * content-addressed storage is the harm, whoever published it first, and no
+ * later takedown reaches an object that is addressed by its own hash.
+ */
+const SNAPSHOT_BLOCKING_KINDS: ReadonlySet<PersonalDataKind> = new Set([
+  "private-key",
+  "payment-card",
+  "national-id",
+]);
+
+/** Enough to characterise a page; not a second copy of it. */
+const MAX_REDACTION_NOTES = 32;
+
+/**
+ * Screens the bytes that were actually fetched, and reports what it found.
+ *
+ * `screenForPersonalData` ran over the creator's typed fields only, and it ran
+ * BEFORE the fetch — so `publicDataOnly: true` and `redactions: []` went into
+ * the manifest as literals about bytes no code had read. The asymmetry was the
+ * tell: the same document pasted as `inlineText` was screened and could be
+ * refused, while the same document named as a URL reached permanent public
+ * storage with an assurance attached that nothing had checked. Mainnet task
+ * 0x88218974… shipped a snapshot in which this project's own EMAIL detector
+ * finds four addresses, under `publicDataOnly: true`.
+ *
+ * `redactions` carries excerpts in which the match itself is already replaced
+ * by a marker, so recording a finding never republishes it.
+ */
+export function screenSnapshots(snapshots: readonly SourceSnapshot[]): {
+  publicDataOnly: boolean;
+  redactions: string[];
+  warnings: string[];
+} {
+  const fields: Record<string, string> = {};
+  for (const snapshot of snapshots) {
+    if (snapshot.text) fields[`${snapshot.sourceId} ${snapshot.uri}`] = snapshot.text;
+  }
+  const screen = screenForPersonalData(fields);
+
+  const blocking = screen.matches.filter((match) => SNAPSHOT_BLOCKING_KINDS.has(match.kind));
+  if (blocking.length > 0) rejectPersonalData({ ok: false, matches: blocking, warnings: screen.warnings });
+
+  const notes: string[] = [];
+  for (const match of screen.matches) {
+    const note = `${match.kind} in ${match.field}: ${match.excerpt}`;
+    if (!notes.includes(note)) notes.push(note);
+    if (notes.length >= MAX_REDACTION_NOTES) break;
+  }
+  // Say so rather than let a truncated list read as the whole finding.
+  if (screen.matches.length > notes.length) {
+    notes.push(`… and ${screen.matches.length - notes.length} more matches not listed`);
+  }
+
+  return {
+    publicDataOnly: screen.matches.length === 0,
+    redactions: notes,
+    warnings: screen.warnings,
+  };
 }
 
 /* ── sources ─────────────────────────────────────────────────────────────── */
@@ -243,7 +315,11 @@ export async function prepareTask(
     },
   );
 
-  const warnings = [...screen.warnings];
+  // Before a byte of this reaches permanent storage: the creator named these
+  // URLs, they did not write what is behind them.
+  const fetched = screenSnapshots(snapshots);
+
+  const warnings = [...screen.warnings, ...fetched.warnings];
   const manifestSources: ManifestSource[] = [];
   const responseSources: PrepareTaskResponse["sources"] = [];
 
@@ -303,9 +379,9 @@ export async function prepareTask(
         ruleId,
       },
       safety: {
-        publicDataOnly: true,
-        redactions: [],
-        warnings: screen.warnings,
+        publicDataOnly: fetched.publicDataOnly,
+        redactions: fetched.redactions,
+        warnings,
       },
       createdAt: now.toISOString(),
     },
@@ -433,6 +509,18 @@ export async function prepareChallenge(
       ...(ctx.fetchOptions ?? {}),
     },
   );
+
+  // Challenge evidence is published exactly as task sources are, so it gets the
+  // same screen. ChallengeEvidence has no `safety` block to record a finding in,
+  // so what is not blocking is logged for the operator rather than dropped.
+  const fetchedScreen = screenSnapshots(snapshots);
+  if (!fetchedScreen.publicDataOnly) {
+    ctx.logger?.warn("challenge evidence carries personal data", {
+      taskId,
+      challenger,
+      redactions: fetchedScreen.redactions.length,
+    });
+  }
 
   // The artifact records a content hash per evidence URL, so the bytes it
   // addresses have to exist somewhere: each snapshot is stored before its hash
