@@ -354,8 +354,20 @@ export function describeConfig(config: Config): string {
 
 export function verifierProfile(profile = env("VERIFIER_PROFILE") ?? "a"): VerifierProfile {
   const key = profile.toUpperCase();
-  const privateKey = asHex(requireEnv(`VERIFIER_${key}_PRIVATE_KEY`));
-  if (!privateKey) throw new Error(`VERIFIER_${key}_PRIVATE_KEY is not set`);
+  const keyVar = `VERIFIER_${key}_PRIVATE_KEY`;
+  // Name the coupling in the message. The profile is spliced into this
+  // variable's name, so an operator who renames the profile to something
+  // meaningful — and the example invites that — gets told a variable they
+  // never wrote is missing, with nothing pointing back at the rename.
+  if (!env(keyVar)) {
+    throw new Error(
+      `${keyVar} is not set. VERIFIER_PROFILE=${profile} chose that name: the profile is ` +
+        `spliced into it, so renaming the profile renames the key variable, ` +
+        `VERIFIER_${key}_EVIDENCE_DEPTH and VERIFIER_${key}_SUPPORT_THRESHOLD with it.`,
+    );
+  }
+  const privateKey = asHex(requireEnv(keyVar));
+  if (!privateKey) throw new Error(`${keyVar} is not a hex private key`);
 
   // Deliberately different pipelines, so agreement means independent
   // configurations reached the same verdict rather than one pipeline run four
