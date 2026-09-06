@@ -1,9 +1,10 @@
 {
   "title": "RFC 2119 requirement keywords",
-  "question": "In RFC 2119, what do the key words MUST NOT and MAY mean?",
+  "question": "In RFC 2119, what do the key words MUST NOT, MAY and SHOULD NOT mean?",
   "claims": [
     "In RFC 2119, the key words MUST NOT mean that the definition is an absolute prohibition of the specification.",
-    "In RFC 2119, the key word MAY means that an item is an absolute requirement of the specification."
+    "In RFC 2119, the key word MAY means that an item is an absolute requirement of the specification.",
+    "In RFC 2119, SHOULD NOT means there may exist valid reasons in particular circumstances when the particular behavior is acceptable or even useful."
   ],
   "sources": ["https://www.rfc-editor.org/rfc/rfc2119.txt"]
 }
