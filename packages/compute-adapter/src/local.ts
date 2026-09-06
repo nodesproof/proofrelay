@@ -164,17 +164,66 @@ export function selectSpans(
       });
     }
     scored.sort(strongest);
-    // Never more than the whole budget from one source.
-    if (scored.length > 0) perSource.push(scored.slice(0, slots));
+    // Retain more than the budget per source: the overlap filter below discards
+    // candidates, and trimming to `slots` first left it nothing to fall back on
+    // — a single-source claim came back with one span instead of three.
+    if (scored.length > 0) perSource.push(scored.slice(0, Math.max(slots * 8, 32)));
   }
 
   const leaders = perSource.map((spans) => spans[0]!).sort(strongest);
   const chosen = leaders.slice(0, slots);
   if (chosen.length < slots) {
+    // `splitSpans` emits a two-sentence window starting at EVERY sentence, so
+    // consecutive candidates always share a sentence and near-duplicates score
+    // near-identically. Filling by score alone therefore spends the budget on
+    // one neighbourhood: on mainnet task 0x88218974… claim-002 drew windows
+    // 17651-17784 and 17717-17818, two overlapping views of RFC 9309 §2.3.1.4's
+    // first paragraph, while the paragraph that follows it — the one carrying
+    // the "crawlers MAY … continue to use a cached copy" qualification — never
+    // entered any model's context. The verdict was faithful to what it was
+    // shown and silent about what it was not.
+    //
+    // A slot spent on text already visible buys nothing. Require new text.
     const rest = perSource.flatMap((spans) => spans.slice(1)).sort(strongest);
+
+    // One slot is reserved for whatever comes NEXT after the best match, when
+    // there is room for it. Normative documents put the exception after the
+    // rule — RFC 9309 §2.3.1.4 states the MUST, then qualifies it in the
+    // following paragraph — and lexical scoring cannot see that, because the
+    // qualification restates none of the claim's words. It is the one span the
+    // claim's own wording guarantees will score badly and the reader most needs.
+    // Reserved rather than hoped for: on a multi-source task the leaders have
+    // already taken every slot, so this only spends one where nothing else was
+    // going to.
+    const top = chosen[0];
+    if (top && chosen.length < slots) {
+      let following;
+      for (const span of rest) {
+        if (span.contentHash !== top.contentHash || span.spanStart < top.spanEnd) continue;
+        if (!following || span.spanStart < following.spanStart) following = span;
+      }
+      if (following) chosen.push(following);
+    }
     for (const span of rest) {
       if (chosen.length >= slots) break;
+      const overlapsChosen = chosen.some(
+        (taken) =>
+          taken.contentHash === span.contentHash &&
+          span.spanStart < taken.spanEnd &&
+          taken.spanStart < span.spanEnd,
+      );
+      if (overlapsChosen) continue;
       chosen.push(span);
+    }
+    // Preferring new text must never mean showing the model LESS. When a source
+    // is short enough that everything overlaps something already taken, fall
+    // back to filling by score, exactly as before.
+    if (chosen.length < slots) {
+      for (const span of rest) {
+        if (chosen.length >= slots) break;
+        if (chosen.includes(span)) continue;
+        chosen.push(span);
+      }
     }
   }
   return chosen.sort(strongest);

@@ -79,4 +79,51 @@ describe("selectSpans", () => {
   it("returns nothing for an empty corpus rather than throwing", () => {
     expect(selectSpans(MUST_NOT, [], 3)).toEqual([]);
   });
+
+  /**
+   * splitSpans emits a two-sentence window starting at EVERY sentence, so
+   * consecutive candidates always share a sentence and score near-identically.
+   * Filling by score alone spent the budget on one neighbourhood: mainnet task
+   * 0x88218974… drew windows 17651-17784 and 17717-17818 for claim-002, two
+   * views of the same paragraph, and the model was judged on one paragraph of a
+   * 25 KB document while believing it had three pieces of evidence.
+   */
+  it("never spends two slots on overlapping text from one source", () => {
+    const chosen = selectSpans(MUST_NOT, [RFC_SOURCE], 3);
+    for (const a of chosen) {
+      for (const b of chosen) {
+        if (a === b || a.contentHash !== b.contentHash) continue;
+        const overlaps = a.spanStart < b.spanEnd && b.spanStart < a.spanEnd;
+        expect(overlaps).toBe(false);
+      }
+    }
+  });
+
+  /**
+   * Preferring new text must never mean showing the model less. The first cut
+   * of this trimmed each source's pool to the budget before filtering, so a
+   * single-source claim came back with one span where it used to get three.
+   */
+  it("still fills the budget when a short source makes everything overlap", () => {
+    const tiny = source("t", "The sky is blue. It scatters light. That is all.", `sha256:${"c3".repeat(32)}`);
+    expect(selectSpans("The sky is blue.", [tiny], 3).length).toBe(3);
+  });
+
+  /**
+   * Normative documents put the exception after the rule. RFC 9309 states the
+   * MUST, then qualifies it in the following paragraph — text that restates
+   * none of the claim's words and so can never score its way in.
+   */
+  it("reserves a slot for what follows the best match", () => {
+    const chosen = selectSpans(MUST_NOT, [RFC_SOURCE], 3);
+    const top = chosen.reduce((best, s) => (s.score > best.score ? s : best), chosen[0]!);
+    const follows = chosen.some((s) => s.contentHash === top.contentHash && s.spanStart >= top.spanEnd);
+    expect(follows).toBe(true);
+  });
+
+  /** The reservation must not cost a source its seat on a multi-source task. */
+  it("still gives every source a slot before reserving a continuation", () => {
+    const chosen = selectSpans(MUST_NOT, [RFC_SOURCE, KAC_SOURCE], 2);
+    expect(new Set(chosen.map((s) => s.sourceId))).toEqual(new Set(["rfc", "kac"]));
+  });
 });
