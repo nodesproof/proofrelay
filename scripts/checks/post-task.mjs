@@ -47,6 +47,30 @@ const chain = new ChainClient({
  * guards a real regression: the offline scorer used to answer this SUPPORTED,
  * because the claim overlaps the source almost word for word.
  */
+/**
+ * The task's subject, from a file when one is named.
+ *
+ * The body below was the only task this script could post, so every run
+ * re-verified the same two sentences about Semantic Versioning — which stops
+ * testing anything once it has passed. A file with `title`, `question`,
+ * `claims` and `sources` replaces it:
+ *
+ *   TASK_FILE=scripts/checks/tasks/rfc2119.json npm run check:post-task
+ *
+ * Windows, verifier count, bounty and creator still come from the environment
+ * and the wallet, so a subject file stays a subject file.
+ */
+const subject = await (async () => {
+  const file = env("TASK_FILE");
+  if (!file) return null;
+  const { readFile } = await import("node:fs/promises");
+  const parsed = JSON.parse(await readFile(file, "utf8"));
+  for (const key of ["title", "question", "claims", "sources"]) {
+    if (!parsed[key]) throw new Error(`${file} has no ${key}`);
+  }
+  return parsed;
+})();
+
 const body = {
   // Unauthenticated callers name the creator explicitly; a browser proves it
   // with a SIWE session instead. Either way the manifest records who asked.
@@ -58,6 +82,14 @@ const body = {
     "Under Semantic Versioning, the MAJOR version is incremented when you add functionality in a backward compatible manner.",
   ],
   sources: ["https://semver.org/"],
+  ...(subject
+    ? {
+        title: subject.title,
+        question: subject.question,
+        claims: subject.claims,
+        sources: subject.sources,
+      }
+    : {}),
   verifierCount,
   commitWindowSec: windowSec,
   revealWindowSec: windowSec,
@@ -75,6 +107,7 @@ const prepared = await fetch(`${apiUrl}/v1/tasks/prepare`, {
 });
 
 for (const warning of prepared.warnings ?? []) console.log(`! ${warning}`);
+console.log("subject  ", body.title);
 console.log("manifest ", prepared.manifestHash);
 console.log("pointer  ", prepared.manifestPointer);
 
