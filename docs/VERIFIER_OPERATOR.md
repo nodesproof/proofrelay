@@ -21,6 +21,15 @@ cp .env.verifier-standalone.example .env
 Fill in `VERIFIER_A_PRIVATE_KEY` and a compute credential. That file is the
 entire configuration; everything network-shaped is defaulted from `CHAIN_ID`.
 
+Then change `COMPUTE_MODEL`. It is the one setting that decides whether you
+are a second opinion: the model is what reads the evidence, so a verifier
+running the same model as one already in the market is not independent of it,
+it is that verifier counted twice — earning a full share of the bounty for
+agreement that means nothing. The example explains how to pick a model this
+pipeline can actually use, and what the evidence-depth and support-threshold
+knobs really do (less than their defaults suggest). The verifier directory on
+the web app shows what the live operators run, so you can avoid them.
+
 ## 2. Fund the key
 
 Read off real receipts at the 4 gwei the network settles at:
