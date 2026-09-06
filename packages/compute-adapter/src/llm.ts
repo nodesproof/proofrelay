@@ -596,7 +596,9 @@ export class LlmComputeAdapter implements ComputeAdapter {
     } catch (error) {
       return {
         ok: false,
-        detail: `${new URL(url).host} -> ${String((error as Error).message).slice(0, 160)}`,
+        // Same unwrapping as the fallback path: "fetch failed" on its own has
+        // never told an operator anything they could act on.
+        detail: `${new URL(url).host} -> ${redactReason(error).slice(0, 200)}`,
         latencyMs: Date.now() - started,
       };
     }
@@ -632,6 +634,33 @@ function parseJson<T>(text: string): T | null {
 
 /** Best-scoring span per source, then the best `limit` overall. */
 /**
+ * The error, plus the causes it is hiding behind.
+ *
+ * `undici` reports every transport failure as the single word "fetch failed"
+ * and puts the part worth reading — ENOTFOUND, ECONNREFUSED, ETIMEDOUT, a
+ * certificate the runtime would not trust — on `cause`. An operator on WSL saw
+ * exactly "fetch failed" and could not tell a broken resolver from a corporate
+ * proxy from a router that was down; the router was fine. Walk the chain so the
+ * message names the thing that actually failed.
+ */
+function errorText(error: unknown): string {
+  const parts: string[] = [];
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+  for (let depth = 0; current != null && depth < 4; depth += 1) {
+    if (seen.has(current)) break;
+    seen.add(current);
+    const entry = current as { message?: unknown; code?: unknown; cause?: unknown };
+    const message = typeof entry.message === "string" && entry.message ? entry.message : String(current);
+    const code = typeof entry.code === "string" ? entry.code : null;
+    const piece = code && !message.includes(code) ? `${message} (${code})` : message;
+    if (piece && !parts.includes(piece)) parts.push(piece);
+    current = entry.cause;
+  }
+  return parts.join(" <- ");
+}
+
+/**
  * An error message fit to publish: no stack, no query string, no credential.
  *
  * The reason goes into an artifact anchored onchain, so it must carry only what
@@ -639,8 +668,7 @@ function parseJson<T>(text: string): T | null {
  * masked because router errors sometimes echo the request back.
  */
 function redactReason(error: unknown): string {
-  const raw = error instanceof Error ? error.message : String(error);
-  return raw
+  return errorText(error)
     .replace(/\bsk-[A-Za-z0-9._-]+/g, "sk-<redacted>")
     .replace(/(bearer\s+)\S+/gi, "$1<redacted>")
     .replace(/([?&](?:key|token|api[_-]?key)=)[^&\s]+/gi, "$1<redacted>")

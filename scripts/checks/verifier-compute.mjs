@@ -127,7 +127,7 @@ let profile;
 try {
   profile = verifierProfile(name);
 } catch (error) {
-  console.log(`${`verifier-${name}`.padEnd(12)}SKIP      ${String(error.message)}`);
+  console.log(`${`verifier-${name}`.padEnd(12)} ${"".padEnd(34)} SKIP      ${String(error.message)}`);
   process.exit(0);
 }
 
@@ -168,7 +168,9 @@ const adapter = createComputeAdapter(config.compute, {
   evidenceDepth: profile.evidenceDepth,
   supportThreshold: profile.supportThreshold,
 });
-const label = `${profile.id.padEnd(12)}${adapter.modelId.padEnd(34)}`;
+// padEnd only pads; it never truncates, so `verifier-nodesproof` ran straight
+// into the model id. One space is the floor.
+const label = `${profile.id.padEnd(12)} ${adapter.modelId.padEnd(34)} `;
 
 const health = await adapter
   .health()

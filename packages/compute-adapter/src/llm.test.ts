@@ -322,6 +322,23 @@ describe("LlmComputeAdapter degradedReason", () => {
     expect(out.trace.degradedReason).toContain("redacted");
   });
 
+  /**
+   * What undici actually throws. The operator on WSL got "fetch failed" and
+   * nothing else, which is true of a dead resolver, a blocked port and a router
+   * that is down — three different fixes, one indistinguishable message.
+   */
+  it("names the cause undici hides behind \"fetch failed\"", async () => {
+    vi.stubGlobal("fetch", async () => {
+      const cause = Object.assign(new Error("getaddrinfo ENOTFOUND router-api.0g.ai"), {
+        code: "ENOTFOUND",
+      });
+      throw Object.assign(new TypeError("fetch failed"), { cause });
+    });
+    const out = await new LlmComputeAdapter(OPTIONS).scoreEvidence(INPUT);
+    expect(out.trace.degradedReason).toContain("ENOTFOUND");
+    expect(out.trace.degradedReason).toContain("fetch failed");
+  });
+
   it("leaves the field off a report that did not degrade", async () => {
     routerReturning({ results: [{ claimId: "claim-001", verdict: "SUPPORTED", confidence: 0.8, spanIndexes: [0] }] });
     const out = await new LlmComputeAdapter(OPTIONS).scoreEvidence(INPUT);
