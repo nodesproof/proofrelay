@@ -42,6 +42,9 @@ const EXPLANATIONS: Record<string, string> = {
   InvalidStatus: "The task is not in a state that allows this yet. A claim, for one, waits for the dispute window to close.",
   NothingToClaim: "Nothing is allocated to this wallet on this task.",
   NothingToWithdraw: "This wallet has no withdrawable balance yet — claim an allocation first.",
+  InsufficientStake:
+    "The contract will not take an approved, active verifier below the minimum stake. Pause this verifier first, " +
+    "or withdraw less than the amount that would drop it under the floor.",
   NotAuthorized: "This wallet is not allowed to do that on this task.",
   ContractPaused: "The contract is paused; creating, committing and challenging are blocked.",
   VerifierNotActive: "This verifier is not approved and active, so it cannot commit.",

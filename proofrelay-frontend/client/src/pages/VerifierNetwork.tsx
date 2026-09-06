@@ -7,11 +7,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useReadContract } from "wagmi";
-import { Activity, ArrowUpRight, CheckCircle2, ChevronDown, Clock3, Copy, ExternalLink, Fingerprint, Plus, ShieldCheck, SlidersHorizontal, Zap } from "lucide-react";
+import { Activity, ArrowUpRight, CheckCircle2, ChevronDown, Clock3, Coins, Copy, ExternalLink, Fingerprint, Plus, ShieldCheck, SlidersHorizontal, Zap } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
 import VerifierAvatar from "@/components/VerifierAvatar";
 import { EmptyStateBlock, ErrorState, SignalRowsSkeleton, Skeleton, StatCardsSkeleton, VerifierRowsSkeleton, errorMessage, writeErrorMessage } from "@/components/states";
-import { POLL_MS, useHealth, useOnchainVerifier, usePaused, useProtocolParams, useTxRunner, useVerifiers, useWallet } from "@/hooks/useProofRelay";
+import { POLL_MS, useHealth, useOnchainVerifier, usePaused, useProtocolParams, useTxRunner, useVerifiers, useWallet, useWithdrawStake } from "@/hooks/useProofRelay";
 import { PROOFRELAY_ADDRESS, proofRelayAbi } from "@/lib/contract";
 import { ACTIVE_CHAIN_ID, EXPLORER_URL, NETWORK_NAME, explorerTxUrl } from "@/lib/wagmi";
 import type { Address, Bytes32, VerifierView } from "@/lib/types";
@@ -63,7 +63,7 @@ export default function VerifierNetwork() {
   const [registerOpen, setRegisterOpen] = useState(false);
   const [metadataOpen, setMetadataOpen] = useState(false);
   const [form, setForm] = useState({ metadataHash: "", metadataPointer: "", stake: "" });
-  const [busy, setBusy] = useState<"register" | "active" | "approval" | null>(null);
+  const [busy, setBusy] = useState<"register" | "active" | "approval" | "unstake" | null>(null);
 
   const verifiers = useVerifiers({ status: statusFilter || undefined });
   const health = useHealth();
@@ -256,6 +256,36 @@ export default function VerifierNetwork() {
     }
   };
 
+  /**
+   * withdrawStake(stake) — the whole locked amount, in one signature.
+   *
+   * Deliberately not chained to withdraw(). That would be two wallet popups
+   * behind one button, and the second is easy to miss: the operator would walk
+   * away believing the 0G had landed when it is still sitting in
+   * pendingWithdrawals. The toast names the remaining step instead.
+   */
+  const withdrawStake = useWithdrawStake();
+  const stakeWeiLocked = chainRecord?.stake ?? 0n;
+  const runUnstake = async () => {
+    if (!current || stakeWeiLocked === 0n) return;
+    const blocker = walletBlocker();
+    if (blocker) { toast.error("Not signed", { description: blocker }); return; }
+    setBusy("unstake");
+    try {
+      const result = await withdrawStake.mutateAsync(stakeWeiLocked);
+      toast.success(`Released ${formatToken(stakeWeiLocked)}`, {
+        description: "It is in pendingWithdrawals, not your wallet yet — Withdraw in the wallet menu sweeps it.",
+        action: result.explorerUrl ? { label: "View", onClick: () => window.open(result.explorerUrl as string, "_blank", "noopener,noreferrer") } : undefined,
+      });
+      onchain.refetch();
+      verifiers.refetch();
+    } catch (error) {
+      toast.error("Unstake failed", { description: writeErrorMessage(error) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const copyValue = async (label: string, value: string | null | undefined) => {
     if (!value) return;
     await navigator.clipboard?.writeText(value);
@@ -353,6 +383,7 @@ export default function VerifierNetwork() {
           <button onClick={() => { void copyValue("Address", checksummedCurrent); }}><Copy size={14} />Copy address</button>
           <button onClick={openOperatorExplorer}><ExternalLink size={14} />View on explorer</button>
           <button onClick={toggleActive} disabled={!isSelf || busy !== null} title={isSelf ? "setVerifierActive(bool) — self-service" : "Only this verifier's own key can pause or resume it."}><Activity size={14} />{busy === "active" ? "Signing…" : (chainRecord?.active ?? current.active) ? "Pause this verifier" : "Resume this verifier"}</button>
+          <button onClick={() => { void runUnstake(); }} disabled={!isSelf || stakeWeiLocked === 0n || busy !== null} title={!isSelf ? "withdrawStake(uint256) takes msg.sender's own stake; only this verifier's key can call it." : stakeWeiLocked === 0n ? "This verifier has nothing staked." : `Releases ${formatToken(stakeWeiLocked)} into pendingWithdrawals. Withdraw in the wallet menu moves it to your wallet.`}><Coins size={14} />{busy === "unstake" ? "Signing…" : stakeWeiLocked === 0n ? "Nothing staked" : `Unstake ${formatToken(stakeWeiLocked)}`}</button>
           <button onClick={toggleApproval} disabled={!isAdmin || busy !== null} title={isAdmin ? "setVerifierApproval(address,bool) — DEFAULT_ADMIN only" : "setVerifierApproval is DEFAULT_ADMIN-gated; this wallet does not hold that role."}><ShieldCheck size={14} />{busy === "approval" ? "Signing…" : (chainRecord?.approved ?? current.approved) ? "Revoke approval" : "Approve verifier"}</button>
         </div>
         <button className="secondary-button full-button" onClick={() => setMetadataOpen(true)}><Fingerprint size={15} />Inspect verifier metadata <ExternalLink size={13} /></button>

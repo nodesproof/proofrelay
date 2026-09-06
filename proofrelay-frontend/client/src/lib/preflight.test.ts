@@ -15,6 +15,11 @@ describe("describeRevert", () => {
   it("explains the contract's own errors in a sentence and says nothing was sent", () => {
     expect(describeRevert("InvalidStatus", "claimReward")).toMatch(/dispute window to close.*Nothing was sent/);
     expect(describeRevert("NothingToWithdraw", "withdraw")).toMatch(/claim an allocation first/);
+    // withdrawStake is the one write whose most likely revert had no sentence.
+    // The contract refuses to take an approved, active verifier below
+    // minVerifierStake, which is 0 on the current deployment and will not stay
+    // there — the mapping has to exist before the floor moves, not after.
+    expect(describeRevert("InsufficientStake", "withdrawStake")).toMatch(/minimum stake/i);
   });
   it("still names an error it has no sentence for", () => {
     expect(describeRevert("SomethingNew", "openChallenge")).toBe("The contract would reject openChallenge (SomethingNew). Nothing was sent.");

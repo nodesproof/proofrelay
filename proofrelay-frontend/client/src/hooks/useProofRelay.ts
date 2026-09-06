@@ -696,6 +696,37 @@ export function useClaimReward() {
 }
 
 /** withdraw() — sweeps pendingWithdrawals(me) to the wallet. Allowed even while the contract is paused. */
+/**
+ * withdrawStake(amount) — releases locked stake into pendingWithdrawals.
+ *
+ * It does NOT reach the wallet. Like every payout here the path is pull-based,
+ * so this is the first of two transactions and `useWithdraw` is the second. The
+ * caller has to say so; a button that implies the money moved would be lying
+ * about which signature did what.
+ *
+ * `msg.sender` is the verifier, so this only ever acts on the connected wallet's
+ * own stake — there is no address argument to get wrong.
+ */
+export function useWithdrawStake() {
+  const { writeContractAsync, feeOverrides, preflight, confirm } = useTxRunner();
+  const queryClient = useQueryClient();
+
+  return useMutation<TxOutcome, Error, bigint>({
+    mutationKey: ["proofrelay", "withdrawStake"],
+    mutationFn: async (amount: bigint) => {
+      const request = { address: PROOFRELAY_ADDRESS, abi: proofRelayAbi, functionName: "withdrawStake", args: [amount] } as const;
+      const [fees, gas] = await Promise.all([feeOverrides(), preflight(request)]);
+      const hash = await writeContractAsync({ ...request, chainId: ACTIVE_CHAIN_ID, ...fees, gas });
+      const receipt = await confirm(hash);
+      return outcome(hash, receipt.blockNumber);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["readContract"] });
+      queryClient.invalidateQueries({ queryKey: ["proofrelay", "activity"] });
+    },
+  });
+}
+
 export function useWithdraw() {
   const { writeContractAsync, feeOverrides, preflight, confirm } = useTxRunner();
   const queryClient = useQueryClient();

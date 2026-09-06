@@ -5,11 +5,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
-import { Activity, ArrowDownToLine, ArrowUpRight, Bell, BookOpen, ChevronDown, Copy, Database, ExternalLink, FileCheck2, KeyRound, Layers3, LockKeyholeOpen, LogOut, Menu, Network, ShieldAlert, WalletCards } from "lucide-react";
+import { Activity, ArrowDownToLine, ArrowUpRight, Bell, BookOpen, ChevronDown, Coins, Copy, Database, ExternalLink, FileCheck2, KeyRound, Layers3, LockKeyholeOpen, LogOut, Menu, Network, ShieldAlert, WalletCards } from "lucide-react";
 import { useReadContract } from "wagmi";
 import { PROOFRELAY_ADDRESS, PROOFRELAY_ADDRESS_IS_UNSET, proofRelayAbi } from "@/lib/contract";
 import { ACTIVE_CHAIN_ID, EXPLORER_URL, NETWORK_NAME } from "@/lib/wagmi";
-import { useActivity, useArtifacts, useHealth, useOnchainVerifier, usePendingWithdrawal, useSession, useStats, useWallet, useWithdraw } from "@/hooks/useProofRelay";
+import { useActivity, useArtifacts, useHealth, useOnchainVerifier, usePendingWithdrawal, useSession, useStats, useWallet, useWithdraw, useWithdrawStake } from "@/hooks/useProofRelay";
 import type { Address, HealthResponse } from "@/lib/types";
 import { blockLabel, chainName, explorerAddressUrl, formatToken, lagLabel, percentLabel, shortChainName, shortChecksumAddress, toChecksumAddress } from "@/lib/format";
 import { NetworkBanner, Skeleton, errorCode, errorMessage, writeErrorMessage } from "./states";
@@ -231,7 +231,37 @@ export default function DashboardLayout({ children, eyebrow, title }: { children
     }
   };
 
-  const walletMenu = (variant: "topbar" | "rail") => <div className={`topbar-pop ${variant === "rail" ? "pop-rail pop-above" : ""}`}><div className="topbar-pop-head"><span>Signer</span><span>{role === null ? "—" : role ?? "resolving"}</span></div><div className="topbar-pop-row"><span>Address</span><strong>{shortSigner ?? "—"}</strong></div><div className="topbar-pop-row"><span>Network</span><strong>{shortChainName(walletNetwork)}</strong></div><div className="topbar-pop-row" title={session.isSignedIn ? `The API accepts this browser as ${shortSigner} until ${new Date(session.expiresAt as string).toLocaleString()}. Signing in authorises no transaction.` : "Posting a task asks the API to snapshot your sources and pin a manifest to 0G Storage on its own key. Signing in is what proves the address asking is yours."}><span>Session</span><strong className={session.isSignedIn ? "" : "value-pending"}>{session.isSignedIn ? "Signed in" : "Not signed in"}</strong></div><div className="topbar-pop-row"><span>Pending withdrawal</span><strong>{withdrawal.wei === undefined ? <Skeleton width={62} height={9} /> : formatToken(withdrawal.wei)}</strong></div>{chainMismatch && <p className="topbar-pop-note">The API indexes {apiNetwork ?? `chain ${apiChainId}`}. Switch the wallet before signing anything.</p>}<div className="topbar-pop-actions">{session.isSignedIn ? <button onClick={() => { void runSignOut(); }} disabled={session.isSigningOut}><LockKeyholeOpen size={13} />{session.isSigningOut ? "Signing out…" : "Sign out"}</button> : <button onClick={() => { void runSignIn(); }} disabled={session.isSigningIn || wallet.isWrongNetwork} title={wallet.isWrongNetwork ? `The challenge names chain ${ACTIVE_CHAIN_ID}; a signature from another chain does not verify.` : undefined}><KeyRound size={13} />{session.isSigningIn ? "Check your wallet…" : "Sign in"}</button>}<button onClick={runWithdraw} disabled={!withdrawal.hasBalance || withdraw.isPending || wallet.isWrongNetwork} title={wallet.isWrongNetwork ? `withdraw() is a transaction on chain ${ACTIVE_CHAIN_ID}; this wallet is on ${walletNetwork}.` : undefined}><ArrowDownToLine size={13} />{withdraw.isPending ? "Withdrawing…" : "Withdraw"}</button><button onClick={copyAddress}><Copy size={13} />Copy address</button><button onClick={openExplorer} disabled={!explorer}><ExternalLink size={13} />View on explorer</button><button onClick={disconnect}><LogOut size={13} />Disconnect</button></div></div>;
+  /**
+   * Unstaking from the wallet menu, so an operator does not have to find its own
+   * row in the directory to get its stake back.
+   *
+   * Rendered only when this wallet actually has stake. The menu opens on every
+   * page for everyone, and almost nobody here is a verifier — a row that reads
+   * "Stake locked 0.00 0G" for the rest is noise, not information. The verifier
+   * drawer says "Nothing staked" instead, because there you are looking at one
+   * named operator and the zero is the answer to a question you asked.
+   *
+   * The read this depends on already exists for the Signer role line, so this
+   * costs no extra RPC.
+   */
+  const withdrawStake = useWithdrawStake();
+  // The same getVerifier read `useSignerRole` makes for the role line. Identical
+  // query key, so react-query serves both from one cache entry and one request.
+  const stakeLocked = useOnchainVerifier(wallet.address).data?.stake ?? 0n;
+  const runUnstake = async () => {
+    if (stakeLocked === 0n) return;
+    try {
+      const result = await withdrawStake.mutateAsync(stakeLocked);
+      toast.success(`Released ${formatToken(stakeLocked)}`, {
+        description: "It is in pendingWithdrawals now — Withdraw, just above, moves it to your wallet.",
+        action: result.explorerUrl ? { label: "View", onClick: () => window.open(result.explorerUrl as string, "_blank", "noopener,noreferrer") } : undefined,
+      });
+    } catch (error) {
+      toast.error("Unstake failed", { description: writeErrorMessage(error) });
+    }
+  };
+
+  const walletMenu = (variant: "topbar" | "rail") => <div className={`topbar-pop ${variant === "rail" ? "pop-rail pop-above" : ""}`}><div className="topbar-pop-head"><span>Signer</span><span>{role === null ? "—" : role ?? "resolving"}</span></div><div className="topbar-pop-row"><span>Address</span><strong>{shortSigner ?? "—"}</strong></div><div className="topbar-pop-row"><span>Network</span><strong>{shortChainName(walletNetwork)}</strong></div><div className="topbar-pop-row" title={session.isSignedIn ? `The API accepts this browser as ${shortSigner} until ${new Date(session.expiresAt as string).toLocaleString()}. Signing in authorises no transaction.` : "Posting a task asks the API to snapshot your sources and pin a manifest to 0G Storage on its own key. Signing in is what proves the address asking is yours."}><span>Session</span><strong className={session.isSignedIn ? "" : "value-pending"}>{session.isSignedIn ? "Signed in" : "Not signed in"}</strong></div>{stakeLocked > 0n && <div className="topbar-pop-row" title="getVerifier(you).stake — locked as a verifier, not spendable until it is released and withdrawn."><span>Stake locked</span><strong>{formatToken(stakeLocked)}</strong></div>}<div className="topbar-pop-row"><span>Pending withdrawal</span><strong>{withdrawal.wei === undefined ? <Skeleton width={62} height={9} /> : formatToken(withdrawal.wei)}</strong></div>{chainMismatch && <p className="topbar-pop-note">The API indexes {apiNetwork ?? `chain ${apiChainId}`}. Switch the wallet before signing anything.</p>}<div className="topbar-pop-actions">{session.isSignedIn ? <button onClick={() => { void runSignOut(); }} disabled={session.isSigningOut}><LockKeyholeOpen size={13} />{session.isSigningOut ? "Signing out…" : "Sign out"}</button> : <button onClick={() => { void runSignIn(); }} disabled={session.isSigningIn || wallet.isWrongNetwork} title={wallet.isWrongNetwork ? `The challenge names chain ${ACTIVE_CHAIN_ID}; a signature from another chain does not verify.` : undefined}><KeyRound size={13} />{session.isSigningIn ? "Check your wallet…" : "Sign in"}</button>}{stakeLocked > 0n && <button onClick={() => { void runUnstake(); }} disabled={withdrawStake.isPending || wallet.isWrongNetwork} title={wallet.isWrongNetwork ? `withdrawStake() is a transaction on chain ${ACTIVE_CHAIN_ID}; this wallet is on ${walletNetwork}.` : `Releases ${formatToken(stakeLocked)} into pendingWithdrawals. Withdraw, below, moves it to your wallet.`}><Coins size={13} />{withdrawStake.isPending ? "Releasing…" : `Unstake ${formatToken(stakeLocked)}`}</button>}<button onClick={runWithdraw} disabled={!withdrawal.hasBalance || withdraw.isPending || wallet.isWrongNetwork} title={wallet.isWrongNetwork ? `withdraw() is a transaction on chain ${ACTIVE_CHAIN_ID}; this wallet is on ${walletNetwork}.` : undefined}><ArrowDownToLine size={13} />{withdraw.isPending ? "Withdrawing…" : "Withdraw"}</button><button onClick={copyAddress}><Copy size={13} />Copy address</button><button onClick={openExplorer} disabled={!explorer}><ExternalLink size={13} />View on explorer</button><button onClick={disconnect}><LogOut size={13} />Disconnect</button></div></div>;
 
   return (
     <div className="app-shell" style={{ "--paperTexture": "url(/proofrelay-paper-texture.svg)" } as React.CSSProperties}>
