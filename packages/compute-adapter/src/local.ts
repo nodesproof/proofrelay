@@ -118,10 +118,70 @@ export class LocalComputeAdapter implements ComputeAdapter {
 }
 
 /**
- * Best span per source, then the best `depth` of those overall. Keeping one
- * span per source rather than the top-N globally is what makes evidence overlap
- * meaningful downstream: two verifiers that both cite the changelog and the
- * README agree on more than two that both quote the changelog twice.
+ * The `limit` spans a claim is judged against: one per source first, then the
+ * best of the rest.
+ *
+ * Source diversity comes first because it is what makes evidence overlap
+ * meaningful downstream — two verifiers that both cite the changelog and the
+ * README agree on more than two that both quote the changelog twice. So while
+ * there are sources left unrepresented, every slot goes to a new one, and a
+ * task with at least `limit` sources behaves exactly as it always did.
+ *
+ * What changed is the case underneath. Taking ONLY the best span per source
+ * meant a task naming one document showed the model exactly one paragraph of
+ * it, whatever `evidenceDepth` said — so depth was inert for the commonest
+ * shape of task, and a claim was judged against a paragraph that merely scored
+ * highest rather than the one that answers it. On mainnet task 0xaca56aee…
+ * every verifier was handed RFC 2119's definition of MUST and asked about
+ * MUST NOT; they answered correctly about the wrong paragraph. Once each source
+ * has a seat, the remaining slots go to the strongest spans from anywhere.
+ */
+export function selectSpans(
+  claimText: string,
+  corpus: EvidenceScoringInput["corpus"],
+  limit: number,
+): EvidenceSpanResult[] {
+  const slots = Math.max(1, limit);
+  // Ties broken by contentHash then offset: a report is hashed and replayed, so
+  // the ordering must never depend on corpus order or on sort stability.
+  const strongest = (a: EvidenceSpanResult, b: EvidenceSpanResult) =>
+    b.score - a.score || a.contentHash.localeCompare(b.contentHash) || a.spanStart - b.spanStart;
+
+  const perSource: EvidenceSpanResult[][] = [];
+  for (const entry of corpus) {
+    const scored: EvidenceSpanResult[] = [];
+    for (const span of splitSpans(entry.text)) {
+      scored.push({
+        sourceId: entry.sourceId,
+        uri: entry.uri,
+        snapshotObjectId: entry.snapshotObjectId,
+        contentHash: entry.contentHash,
+        quotedSpan: span.text,
+        spanStart: span.start,
+        spanEnd: span.end,
+        score: scoreSpan(claimText, span.text),
+        retrievedAt: entry.retrievedAt,
+      });
+    }
+    scored.sort(strongest);
+    // Never more than the whole budget from one source.
+    if (scored.length > 0) perSource.push(scored.slice(0, slots));
+  }
+
+  const leaders = perSource.map((spans) => spans[0]!).sort(strongest);
+  const chosen = leaders.slice(0, slots);
+  if (chosen.length < slots) {
+    const rest = perSource.flatMap((spans) => spans.slice(1)).sort(strongest);
+    for (const span of rest) {
+      if (chosen.length >= slots) break;
+      chosen.push(span);
+    }
+  }
+  return chosen.sort(strongest);
+}
+
+/**
+ * Scores one claim against the corpus, offline.
  */
 export function scoreClaim(
   claim: ExtractedClaim,
@@ -131,32 +191,7 @@ export function scoreClaim(
   /** Standing in for a model rather than serving as the chosen engine, and why. */
   conservative: FallbackReason | false = false,
 ): ClaimScoringResult {
-  const perSource: EvidenceSpanResult[] = [];
-
-  for (const entry of corpus) {
-    let best: EvidenceSpanResult | null = null;
-    for (const span of splitSpans(entry.text)) {
-      const score = scoreSpan(claim.claimText, span.text);
-      if (!best || score > best.score) {
-        best = {
-          sourceId: entry.sourceId,
-          uri: entry.uri,
-          snapshotObjectId: entry.snapshotObjectId,
-          contentHash: entry.contentHash,
-          quotedSpan: span.text,
-          spanStart: span.start,
-          spanEnd: span.end,
-          score,
-          retrievedAt: entry.retrievedAt,
-        };
-      }
-    }
-    if (best) perSource.push(best);
-  }
-
-  // Ties broken by contentHash so the ordering never depends on corpus order.
-  perSource.sort((a, b) => b.score - a.score || a.contentHash.localeCompare(b.contentHash));
-  const sources = perSource.slice(0, Math.max(1, depth));
+  const sources = selectSpans(claim.claimText, corpus, depth);
   const top = sources[0];
 
   const judgement = top

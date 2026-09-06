@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { ProofRelayError, objectHash, withRetry } from "@proofrelay/schemas";
 import { compareFacts, type FallbackReason, scoreSpan, splitSpans } from "./entailment.js";
-import { LocalComputeAdapter, PIPELINE_VERSION, scoreClaim } from "./local.js";
+import { LocalComputeAdapter, PIPELINE_VERSION, scoreClaim, selectSpans } from "./local.js";
 import type {
   ClaimExtractionInput,
   ClaimScoringResult,
@@ -429,7 +429,7 @@ export class LlmComputeAdapter implements ComputeAdapter {
     // labels them; it never authors them.
     const candidates = new Map<string, EvidenceSpanResult[]>();
     for (const claim of input.claims) {
-      candidates.set(claim.claimId, topSpans(claim.claimText, input.corpus, Math.max(depth, 3)));
+      candidates.set(claim.claimId, selectSpans(claim.claimText, input.corpus, Math.max(depth, 3)));
     }
 
     let results: ClaimScoringResult[];
@@ -707,34 +707,5 @@ function redactReason(error: unknown): string {
     .slice(0, 300);
 }
 
-function topSpans(
-  claimText: string,
-  corpus: EvidenceScoringInput["corpus"],
-  limit: number,
-): EvidenceSpanResult[] {
-  const perSource: EvidenceSpanResult[] = [];
-  for (const entry of corpus) {
-    let best: EvidenceSpanResult | null = null;
-    for (const span of splitSpans(entry.text)) {
-      const score = scoreSpan(claimText, span.text);
-      if (!best || score > best.score) {
-        best = {
-          sourceId: entry.sourceId,
-          uri: entry.uri,
-          snapshotObjectId: entry.snapshotObjectId,
-          contentHash: entry.contentHash,
-          quotedSpan: span.text,
-          spanStart: span.start,
-          spanEnd: span.end,
-          score,
-          retrievedAt: entry.retrievedAt,
-        };
-      }
-    }
-    if (best) perSource.push(best);
-  }
-  perSource.sort((a, b) => b.score - a.score || a.contentHash.localeCompare(b.contentHash));
-  return perSource.slice(0, limit);
-}
 
 export { compareFacts };
