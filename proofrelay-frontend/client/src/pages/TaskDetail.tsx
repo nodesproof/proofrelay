@@ -36,14 +36,29 @@ const VERDICT_LABEL: Record<Verdict, string> = { SUPPORTED: "SUPPORTED", CONTRAD
  * Operator identity is deliberately absent: the API does not carry it, and
  * inferring it from addresses would be a worse answer than not showing it.
  */
-function composition(task: TaskDetailView): { revealed: number; models: number; providers: number; sources: number } {
+export function composition(task: TaskDetailView): {
+  models: number;
+  providers: number;
+  sources: number;
+  offline: number;
+} {
   const revealed = task.reports.filter((report) => report.revealed);
-  const distinct = (values: (string | null)[]) => new Set(values.filter((value): value is string => Boolean(value))).size;
+  // A report that fell back to the offline scorer carries
+  // `local-entailment/<depth>-<threshold>` as its model and
+  // `zerog-router(fallback:local)` as its provider (llm.ts). Counted with the
+  // rest, a verifier whose compute key had expired made this line read "4
+  // models · 2 providers" — MORE diverse than the healthy case — while the
+  // agreement label beside it said 3/4, because consensus excludes it. Offline
+  // work is its own term, or it flatters exactly the failure it should expose.
+  const offline = (value: string | null) => Boolean(value && /local-entailment|fallback:local/.test(value));
+  const live = revealed.filter((report) => !offline(report.modelId) && !offline(report.computeProvider));
+  const distinct = (values: (string | null)[]) =>
+    new Set(values.filter((value): value is string => Boolean(value))).size;
   return {
-    revealed: revealed.length,
-    models: distinct(revealed.map((report) => report.modelId)),
-    providers: distinct(revealed.map((report) => report.computeProvider)),
+    models: distinct(live.map((report) => report.modelId)),
+    providers: distinct(live.map((report) => report.computeProvider)),
     sources: task.sources.length,
+    offline: revealed.length - live.length,
   };
 }
 
@@ -271,7 +286,7 @@ export default function TaskDetail() {
       </div>
     </section>
 
-    <section className="task-summary-grid">{!task ? <StatCardsSkeleton cards={3} className="summary-strip" /> : <><div className="summary-strip"><span className="summary-label">BOUNTY ESCROWED</span><strong>{task.bountyFormatted}</strong><span>{task.verifierCount} verifiers · creator {shortAddress(toChecksumAddress(task.creator) ?? task.creator)}</span></div><div className="summary-strip sky-summary"><span className="summary-label">AGREEMENT</span><strong>{task.agreementLabel}</strong>{(() => { const made = composition(task); return made.revealed === 0 ? <span>{task.committedCount}/{task.verifierCount} committed · {task.revealedCount}/{task.verifierCount} revealed</span> : <span title="Agreement between verifiers that share a retriever and a candidate span set counts for less than agreement between independent ones. These are the parts this API can see; it does not carry operator identity.">{count(made.models, "model")} · {count(made.providers, "provider")} · {count(made.sources, "source")}</span>; })()}</div><div className={`summary-strip ${disputeLive || conflicted.length > 0 ? "coral-summary" : "sky-summary"}`}><span className="summary-label">{disputeLive ? "DISPUTE" : "DISPUTE WINDOW"}</span><strong>{disputeLive ? untilLabel(dispute?.deadline, now) ?? "open" : untilLabel(task.disputeDeadline, now) ?? "—"}</strong><span>{disputeLive ? `challenged by ${shortAddress(dispute?.challenger)}` : conflicted.length > 0 ? `${conflicted.length} of ${claims.length} claims contested` : "no challenge opened"}</span></div></>}</section>
+    <section className="task-summary-grid">{!task ? <StatCardsSkeleton cards={3} className="summary-strip" /> : <><div className="summary-strip"><span className="summary-label">BOUNTY ESCROWED</span><strong>{task.bountyFormatted}</strong><span>{task.verifierCount} verifiers · creator {shortAddress(toChecksumAddress(task.creator) ?? task.creator)}</span></div><div className="summary-strip sky-summary"><span className="summary-label">AGREEMENT</span><strong>{task.agreementLabel}</strong>{(() => { const made = composition(task); /* modelId and computeProvider arrive from the indexer after the reveal the chain already counted, so a task can be revealed with neither known yet. Falling back to progress is right until there is something to say. */ return made.models === 0 ? <span>{task.committedCount}/{task.verifierCount} committed · {task.revealedCount}/{task.verifierCount} revealed</span> : <span title="Verifiers that share a retriever, a candidate span set and a provider agree more easily than independent ones. These are the parts this API can see; it does not carry operator identity.">{count(made.models, "model")} · {count(made.providers, "provider")} · {count(made.sources, "source")}{made.offline > 0 ? ` · ${made.offline} offline` : ""}</span>; })()}</div><div className={`summary-strip ${disputeLive || conflicted.length > 0 ? "coral-summary" : "sky-summary"}`}><span className="summary-label">{disputeLive ? "DISPUTE" : "DISPUTE WINDOW"}</span><strong>{disputeLive ? untilLabel(dispute?.deadline, now) ?? "open" : untilLabel(task.disputeDeadline, now) ?? "—"}</strong><span>{disputeLive ? `challenged by ${shortAddress(dispute?.challenger)}` : conflicted.length > 0 ? `${conflicted.length} of ${claims.length} claims contested` : "no challenge opened"}</span></div></>}</section>
 
     <div className="lower-grid">
       <div className="evidence-section">
@@ -288,7 +303,7 @@ export default function TaskDetail() {
           <p className="section-disclosure">
             Verdicts below were produced by language models reading the quoted spans. No person reviewed them, and
             a model can be confidently wrong about text it was shown.{" "}
-            <a href="https://github.com/nodesproof/proofrelay/blob/main/docs/VERIFICATION.md" target="_blank" rel="noopener noreferrer">How a verdict is produced</a>
+            <a href="https://github.com/nodesproof/proofrelay/blob/main/docs/VERIFICATION.md#how-a-verdict-is-produced" target="_blank" rel="noopener noreferrer">How a verdict is produced</a>
           </p>
           <div className="evidence-list">{!task ? <EvidenceRowsSkeleton rows={3} /> : claims.length === 0 ? <EmptyState icon="inbox">No claim has been read from the manifest yet.</EmptyState> : claims.map((claim) => { const spread = verdictSpread(claim); const conflict = isConflicted(claim); const tone = conflict ? "coral" : CLAIM_TONE[claim.displayVerdict]; return <div className={`evidence-item ${openClaim === claim.claimId ? "expanded" : ""} ${conflict ? "conflict" : ""}`} key={claim.claimId}><button className="evidence-head" onClick={() => setExpanded(openClaim === claim.claimId ? "" : claim.claimId)}><div className={`evidence-number number-${tone === "coral" ? "coral" : tone === "sky" ? "sky" : tone === "ink" ? "ink" : "lime"}`}>{claim.ordinal}</div><div className="evidence-title" title={claim.claimText}><strong>{claim.claimText}</strong><span><FileText size={12} />{claim.primarySourceLabel ?? "no source quoted yet"}</span></div><Pill tone={tone}>{conflict ? "CONFLICT" : claim.displayVerdict}</Pill><span className="confidence" title={conflict ? "verifiers agreeing on the leading verdict, out of those that reported" : "mean confidence of the agreeing verifiers"}>{conflict ? `${spread.majority}/${spread.total}` : claim.confidencePct === null ? "—" : `${claim.confidencePct}%`}</span><ChevronDown size={16} className="evidence-chevron" /></button>{openClaim === claim.claimId && <div className="evidence-detail">{claim.verdicts.length === 0 ? <EmptyState icon="inbox">No verifier has revealed a report for this claim yet.</EmptyState> : <><div className="evidence-meta"><span><ShieldCheck size={12} />{conflict ? "verifiers disagree — every verdict is shown" : `${spread.majority}/${spread.total} verifiers agree`}</span>{claim.evidenceCoverage !== null && <span><FileText size={12} />evidence coverage {Math.round(claim.evidenceCoverage * 100)}%</span>}{claim.retrievedAt && <span><Clock3 size={12} />retrieved {utcClock(claim.retrievedAt)} UTC</span>}</div><div className="verdict-strip">{claim.verdicts.map((verdict) => <div className="verdict-line" key={`${claim.claimId}:${verdict.verifier}`}><span className="verdict-who"><strong>{verdict.verifierLabel}</strong><span>{shortAddress(toChecksumAddress(verdict.verifier) ?? verdict.verifier)}</span></span><Pill tone={VERDICT_TONE[verdict.verdict]}>{VERDICT_LABEL[verdict.verdict]}</Pill><span className="confidence">{Math.round(verdict.confidence * 100)}%</span></div>)}</div>{(() => { const why = reasonings(claim); return why.shared ? <p className="verdict-reasoning">{why.shared}</p> : why.perVerifier.map((verdict) => <p className="verdict-reasoning" key={`${claim.claimId}:${verdict.verifier}:why`}><strong>{verdict.verifierLabel}:</strong> {verdict.reasoningSummary}</p>); })()}{citedSpans(claim).map(({ span, citedBy }) => <div className="verdict-source" key={`${span.contentHash}:${span.snapshotObjectId}:${span.quotedSpan.slice(0, 40)}`}><div className="quote-mark">“</div><p>{span.quotedSpan}</p><div className="evidence-meta"><span><ShieldCheck size={12} />cited by {citedBy.join(", ")}</span><span><FileText size={12} />{hostOf(span.uri)}</span><span><Hash size={12} />{shortHash(span.contentHash)}</span><span className="storage-pointer"><Database size={12} />{shortHash(span.snapshotObjectId, 6, 6)}</span><span><Clock3 size={12} />{utcClock(span.retrievedAt)} UTC</span><button onClick={() => open(span.uri)}>Open source <ArrowUpRight size={12} /></button></div></div>)}</>}</div>}</div>; })}</div>
         </section>

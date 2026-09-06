@@ -431,14 +431,43 @@ The Solidity suite includes 10 fuzz properties and 5 stateful invariants
 completeness, and a reachability test so the other four are never asserted about
 an empty contract).
 
-## What is not verified
+## How a verdict is produced
 
-**0G Compute has not run a real inference.** `COMPUTE_DRIVER=local` and the
-deterministic engine produced every report above. The router and broker drivers
-are written and tested, and `/health` probes the router's live model catalog,
-but a real call needs `COMPUTE_API_KEY`, which can only be created by connecting
-a wallet at <https://pc.testnet.0g.ai>. Until that is set, PRD FR-08 is
-unsatisfied and this document should not claim otherwise.
+A verdict is written by a language model, and nothing about that is hidden in
+the artifact. This section says what the model is given, what it is allowed to
+return, and what happens when it fails — because the page that publishes a
+verdict links here, and a reader deciding whether to trust one needs it.
+
+**The model never chooses its own evidence.** `selectSpans`
+(`packages/compute-adapter/src/local.ts`) picks candidate spans from the
+snapshotted source by lexical overlap, deterministically, before the model is
+called. Each source gets a slot before any source gets a second; no two chosen
+spans from one source overlap; and one slot is reserved for the text that
+immediately follows the best match, because normative documents put the
+exception after the rule.
+
+**The model labels, and cites by index.** The prompt (`llm.ts`) sends the claim
+and the numbered spans, and asks for one of exactly three values — `SUPPORTED`,
+`CONTRADICTED`, `INSUFFICIENT_EVIDENCE` — a confidence between 0 and 1, and the
+indexes of the spans it relied on. Decoding is `temperature: 0`, `top_p: 1`,
+with a fixed `seed`. The model cannot author a quotation: it returns indexes
+into a list it was handed, so a fabricated citation is not expressible.
+
+**It fails closed.** A verdict outside those three values, an index that does
+not exist, an asserting verdict citing nothing, or a confidence outside 0..1 is
+refused — that claim falls to the deterministic scorer and is marked `degraded`.
+A degraded verdict is excluded from consensus *and* from reward by one flag
+(`packages/consensus/src/engine.ts`), so a verifier is not paid for work its
+model did not do. The reason for any fallback is recorded on the trace as
+`degradedReason`, redacted of credentials.
+
+**What the model is not.** It reads the spans it was shown and nothing else. It
+has no access to the live page, no memory of the claim, and no way to check the
+source against the world. A verdict is an entailment judgement about retrieved
+text, not a finding of fact — and nothing in the pipeline measures whether the
+retrieved text was the part that mattered.
+
+## What is not verified
 
 **`expireDispute` has not been executed against the deployment.** It needs a
 dispute left unresolved past its `adjudicationWindow` — seven days on the live
