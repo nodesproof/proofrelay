@@ -314,6 +314,29 @@ export class VerifierWorker {
       now,
     });
 
+    // Say out loud when the model was not what answered.
+    //
+    // The compute adapter has no logger, so until now a failed router call was
+    // recorded in the report trace and nowhere else: the worker carried on,
+    // committed, revealed and was paid, and the only way to discover it was to
+    // open the artifact. On mainnet task 0xa11e3223… (2026-09-05) that is
+    // exactly what happened — a transient compute failure, no log line, and a
+    // wrong verdict published under the model's name.
+    const degradedClaims = report.claims.filter((claim) => claim.degraded).map((claim) => claim.claimId);
+    const wholeCall = report.compute.some((trace) => /fallback:local/.test(trace.provider));
+    if (wholeCall || degradedClaims.length > 0) {
+      this.deps.log("warn", wholeCall ? "compute failed; the whole report was scored offline" : "some claims were scored offline", {
+        verifierId: this.deps.verifierId,
+        taskId: work.taskId,
+        modelId: report.verifier.modelId,
+        provider: report.compute.map((trace) => trace.provider).join(", "),
+        degradedClaims,
+        // Neither counts toward consensus nor earns a share, so this is lost
+        // revenue as well as lost signal.
+        of: report.claims.length,
+      });
+    }
+
     // Upload before committing: a commitment to a report nobody can fetch is
     // worthless, and the upload is the step most likely to fail.
     const stored = await withRetry(() => this.deps.storage.put("verifier-report", report), { attempts: 3 });

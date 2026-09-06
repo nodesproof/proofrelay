@@ -147,6 +147,19 @@ export const ClaimEvidence = z.object({
   sources: z.array(EvidenceSource),
   verifier: VerifierIdentity,
   reasoningSummary: z.string(),
+  /**
+   * This verdict came from the offline scorer, not from the model named above.
+   *
+   * Optional so every report written before this field existed still parses.
+   * Absent and `false` mean the same thing; only `true` is a claim about the
+   * verdict's provenance.
+   *
+   * `verifier.modelId` reports the whole call and cannot express this: a report
+   * can name the router truthfully while one of its verdicts never reached it.
+   * Consensus reads this field, so a degraded verdict neither counts toward
+   * agreement nor earns a share of the bounty.
+   */
+  degraded: z.boolean().optional(),
   createdAt: isoDate,
 });
 export type ClaimEvidence = z.infer<typeof ClaimEvidence>;

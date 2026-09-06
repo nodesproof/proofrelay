@@ -10,6 +10,12 @@
  * a trace nobody reads. This runs one real scoring call through the real adapter
  * and says which engine answered.
  *
+ *   OK        the model answered every claim, and the verdicts are right
+ *   PARTIAL   the model answered, but the driver refused it on some claim and
+ *             that one fell to the offline scorer
+ *   DEGRADED  the compute call failed outright; nothing reached a model
+ *   WRONG     the model answered and got it wrong
+ *
  *   node scripts/checks/verifier-compute.mjs           # a, b, c, d
  *   node scripts/checks/verifier-compute.mjs c d       # just these
  *
@@ -112,11 +118,27 @@ const ms = Date.now() - started;
 // The trace is the only place a substitution shows. `provider` reading
 // `…(fallback:local)` means the whole call degraded; a per-claim degrade is
 // quieter still, so the verdicts are compared too.
+// Two different failures that used to look the same. `provider` reports the
+// whole call; `result.degraded` reports one claim whose answer the driver
+// refused — a verdict outside the accepted literals, most often a model
+// writing CONTRADICT for CONTRADICTED. Before the per-claim marker existed
+// that second case was invisible here and showed up only as WRONG, which
+// sends you looking at the wrong thing.
 const degraded = /fallback:local/.test(trace.provider ?? "");
+const degradedClaims = value.filter((result) => result.degraded).map((result) => result.claimId);
 const wrong = value.filter((result) => result.verdict !== EXPECTED[result.claimId]);
-const status = degraded ? "DEGRADED" : wrong.length ? "WRONG" : "OK";
+const status = degraded
+  ? "DEGRADED"
+  : degradedClaims.length
+    ? "PARTIAL"
+    : wrong.length
+      ? "WRONG"
+      : "OK";
 
-console.log(`${label}${status.padEnd(10)}${ms}ms  provider=${trace.provider ?? "?"}`);
+console.log(
+  `${label}${status.padEnd(10)}${ms}ms  provider=${trace.provider ?? "?"}` +
+    (degradedClaims.length ? `  model answer refused for ${degradedClaims.join(", ")}` : ""),
+);
 console.log(
   `${" ".repeat(12)}${value.map((r) => `${r.claimId}=${r.verdict}@${r.confidence}`).join("  ")}`,
 );

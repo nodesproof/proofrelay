@@ -664,3 +664,73 @@ describe("recorded results", () => {
     }
   });
 });
+
+/**
+ * From mainnet task 0xa11e3223… (2026-09-05). Two of four verifiers could not
+ * reach their model on one claim; both fell to the offline scorer, both
+ * returned the same wrong SUPPORTED, and the claim split two-two. The task
+ * settled CONFLICT and the contract paid all four the conflict rate — including
+ * the one whose entire report came from lexical scoring and cost it no
+ * inference at all.
+ *
+ * A verdict nobody's model produced must not decide the outcome or earn a share.
+ * It stays in the record: the vote is still listed, so the failure is auditable.
+ */
+const VERIFIER_D = "0x90f79bf6eb2c4f870365e785982e1f101e93b906";
+
+describe("degraded verdicts", () => {
+  const supported = (claimId: string) => ({ claimId, verdict: "SUPPORTED" as const, confidence: 0.9 });
+
+  function degrade(r: VerifierReport): VerifierReport {
+    return { ...r, claims: r.claims.map((claim) => ({ ...claim, degraded: true })) };
+  }
+
+  it("does not let an offline verdict carry the majority", () => {
+    // Two real CONTRADICTED against two degraded SUPPORTED: without the change
+    // this is a two-two split and the claim does not agree.
+    const result = evaluate([
+        report(VERIFIER_A, [{ claimId: "claim-001", verdict: "CONTRADICTED", confidence: 0.95 }]),
+        report(VERIFIER_B, [{ claimId: "claim-001", verdict: "CONTRADICTED", confidence: 1 }]),
+        degrade(report(VERIFIER_C, [supported("claim-001")])),
+        degrade(report(VERIFIER_D, [supported("claim-001")])),
+    ]);
+    expect(result.claims[0]!.majorityVerdict).toBe("CONTRADICTED");
+    expect(result.outcome).toBe("CONSENSUS");
+  });
+
+  it("pays only the verifiers whose model answered", () => {
+    const result = evaluate([
+        report(VERIFIER_A, [supported("claim-001")]),
+        report(VERIFIER_B, [supported("claim-001")]),
+        degrade(report(VERIFIER_C, [supported("claim-001")])),
+    ]);
+    expect(result.outcome).toBe("CONSENSUS");
+    expect(result.rewardedVerifiers).toEqual([VERIFIER_A, VERIFIER_B]);
+    expect(result.rewardedVerifiers).not.toContain(VERIFIER_C);
+  });
+
+  it("keeps the degraded vote visible in the record", () => {
+    const result = evaluate([
+        report(VERIFIER_A, [supported("claim-001")]),
+        report(VERIFIER_B, [supported("claim-001")]),
+        degrade(report(VERIFIER_C, [supported("claim-001")])),
+    ]);
+    const voters = result.claims[0]!.verdicts.map((v) => v.verifier);
+    expect(voters).toContain(VERIFIER_C);
+    // Listed, but not counted as agreeing.
+    expect(result.claims[0]!.agreeingVerifiers).not.toContain(VERIFIER_C);
+  });
+
+  it("falls to NO_QUORUM when too few models answered", () => {
+    // Three of four offline leaves one usable opinion, below requiredAgreement.
+    // A refund is the honest outcome; a consensus built from lexical scoring
+    // would not be.
+    const result = evaluate([
+        report(VERIFIER_A, [supported("claim-001")]),
+        degrade(report(VERIFIER_B, [supported("claim-001")])),
+        degrade(report(VERIFIER_C, [supported("claim-001")])),
+    ]);
+    expect(result.claims[0]!.agreed).toBe(false);
+    expect(result.rewardedVerifiers).toEqual([]);
+  });
+});

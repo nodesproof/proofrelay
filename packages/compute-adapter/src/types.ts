@@ -41,6 +41,16 @@ export interface ClaimScoringResult {
   confidence: number;
   reasoningSummary: string;
   sources: EvidenceSpanResult[];
+  /**
+   * This one claim was scored offline because the model's answer for it could
+   * not be used — a verdict outside the accepted literals, an unusable span
+   * index, a confidence out of range — or because the whole call fell back.
+   *
+   * Report-level `provider` only records the second case, so before this a
+   * per-claim fallback was invisible: the report named the router while one of
+   * its verdicts had never reached it.
+   */
+  degraded?: boolean;
 }
 
 export interface EvidenceScoringInput {

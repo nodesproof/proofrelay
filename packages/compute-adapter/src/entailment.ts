@@ -276,8 +276,25 @@ export function judge(args: {
   bestSpan: string;
   bestScore: number;
   supportThreshold: number;
+  /**
+   * Refuse to assert SUPPORTED from lexical overlap alone.
+   *
+   * Set only when this scorer is standing in for a model that could not be
+   * reached. As the primary engine — COMPUTE_DRIVER=local — the operator chose
+   * a lexical pipeline and gets its verdicts unchanged.
+   *
+   * The distinction is not fussiness. A claim that swaps one decisive word
+   * against a source stating the rule for both ("MAJOR version when you add
+   * functionality in a backward compatible manner", against a page that says
+   * MINOR) overlaps almost perfectly, so the score clears the threshold and the
+   * verdict comes out SUPPORTED — the opposite of what the source says. That
+   * happened on mainnet task 0xa11e3223… on 2026-09-05. Overlap is not
+   * entailment, and a fallback that cannot tell them apart should say so rather
+   * than guess in the confident direction.
+   */
+  conservative?: boolean;
 }): Judgement {
-  const { claim, bestSpan, bestScore, supportThreshold } = args;
+  const { claim, bestSpan, bestScore, supportThreshold, conservative = false } = args;
   const facts = compareFacts(claim, bestSpan);
   const round = (value: number) => Math.round(value * 10_000) / 10_000;
 
@@ -308,6 +325,21 @@ export function judge(args: {
       reasoningSummary:
         `The closest span (score ${bestScore.toFixed(2)}) is below this pipeline's support threshold ` +
         `of ${supportThreshold.toFixed(2)}, so the claim is not established by the snapshot.`,
+    };
+  }
+
+  if (conservative) {
+    // Deliberately after the CONTRADICTED branch above: capping support must
+    // not also silence refutation, or a degraded verifier goes quiet exactly
+    // when it has something worth saying.
+    return {
+      verdict: "INSUFFICIENT_EVIDENCE",
+      confidence: round(0.25 + bestScore / 3),
+      reasoningSummary:
+        `The closest span scores ${bestScore.toFixed(2)}, above this pipeline's support threshold of ` +
+        `${supportThreshold.toFixed(2)}, but no model weighed it: the compute call failed and this ` +
+        "verdict comes from lexical scoring alone, which cannot tell a matching sentence from an " +
+        "entailing one. Reported as insufficient rather than asserted as support.",
     };
   }
 

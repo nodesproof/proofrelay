@@ -128,6 +128,8 @@ export function scoreClaim(
   corpus: EvidenceScoringInput["corpus"],
   depth: number,
   supportThreshold: number,
+  /** Standing in for a model rather than serving as the chosen engine. */
+  conservative = false,
 ): ClaimScoringResult {
   const perSource: EvidenceSpanResult[] = [];
 
@@ -163,6 +165,7 @@ export function scoreClaim(
         bestSpan: top.quotedSpan,
         bestScore: top.score,
         supportThreshold,
+        conservative,
       })
     : {
         verdict: "INSUFFICIENT_EVIDENCE" as const,
@@ -177,5 +180,8 @@ export function scoreClaim(
     confidence: judgement.confidence,
     reasoningSummary: judgement.reasoningSummary,
     sources: top ? sources : [],
+    // Only when standing in for a model. As the chosen engine there is nothing
+    // degraded about this result.
+    ...(conservative ? { degraded: true } : {}),
   };
 }

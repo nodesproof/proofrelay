@@ -263,3 +263,54 @@ describe("LocalComputeAdapter", () => {
     expect(result.sources).toEqual([]);
   });
 });
+
+/**
+ * The failure this suite exists to prevent, taken from a real mainnet task
+ * (0xa11e3223…, 2026-09-05). The claim swaps one decisive word — MAJOR for
+ * MINOR — against a source that states the rule for both. Lexical overlap is
+ * near-total, so the scorer read it as support and published SUPPORTED at 0.74
+ * on a claim the source directly refutes.
+ *
+ * As the primary engine that behaviour stays: an operator who chose
+ * COMPUTE_DRIVER=local asked for a lexical pipeline and gets one. As the
+ * fallback behind a model it must not, because there nobody chose it — it is
+ * what happens when the model could not be reached, and asserting support from
+ * word overlap is worse than admitting the evidence was never weighed.
+ */
+describe("judge in conservative mode", () => {
+  const SEMVER =
+    "MAJOR version when you make incompatible API changes. " +
+    "MINOR version when you add functionality in a backward compatible manner. " +
+    "PATCH version when you make backward compatible bug fixes.";
+  const swapped =
+    "Under Semantic Versioning, the MAJOR version is incremented when you add functionality in a backward compatible manner.";
+  const args = { claim: swapped, bestSpan: SEMVER, bestScore: 0.58, supportThreshold: 0.55 };
+
+  it("reproduces the wrong SUPPORTED as the primary engine", () => {
+    expect(judge(args).verdict).toBe("SUPPORTED");
+  });
+
+  it("refuses to assert support as a fallback", () => {
+    const verdict = judge({ ...args, conservative: true });
+    expect(verdict.verdict).toBe("INSUFFICIENT_EVIDENCE");
+    expect(verdict.reasoningSummary).toMatch(/model/i);
+  });
+
+  it("still reports a contradiction it can actually see", () => {
+    // Conservative caps support; it must not also silence refutation, or a
+    // degraded verifier would go quiet exactly when it has something to say.
+    const numeric = judge({
+      claim: "The 0G mainnet chain id is 16602.",
+      bestSpan: "0G Mainnet — Chain ID 16661.",
+      bestScore: 0.8,
+      supportThreshold: 0.55,
+      conservative: true,
+    });
+    expect(numeric.verdict).toBe("CONTRADICTED");
+  });
+
+  it("leaves an already-insufficient verdict alone", () => {
+    const weak = { claim: "unrelated assertion", bestSpan: SEMVER, bestScore: 0.1, supportThreshold: 0.55 };
+    expect(judge({ ...weak, conservative: true })).toEqual(judge(weak));
+  });
+});

@@ -81,6 +81,12 @@ function providerReturning(): { sent: Record<string, string>[]; urls: string[] }
                       claimId: "claim-001",
                       verdict: "SUPPORTED",
                       confidence: 0.9,
+                      // Required, and previously absent. The driver refuses an
+                      // asserting verdict that cites nothing, so without this
+                      // the claim fell to the offline scorer — which happened
+                      // to return SUPPORTED too, leaving these tests green
+                      // while never once exercising the model path they name.
+                      spanIndexes: [0],
                       reasoning: "stated directly",
                       sources: [{ sourceId: "src-001", quotedSpan: "bumps its dependencies" }],
                     },

@@ -100,6 +100,7 @@ export async function buildReport(input: PipelineInput): Promise<{
       pipelineVersion: input.compute.pipelineVersion,
     },
     reasoningSummary: result.reasoningSummary,
+    ...(result.degraded ? { degraded: true } : {}),
     createdAt,
   }));
 

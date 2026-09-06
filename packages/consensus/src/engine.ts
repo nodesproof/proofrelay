@@ -71,6 +71,16 @@ interface ClaimVote {
   snapshots: readonly string[];
   /** Whether the verdict clears the rule's confidence floor. */
   counts: boolean;
+  /**
+   * Scored offline because the compute call failed — not an opinion at all,
+   * as distinct from a real opinion too weak to count.
+   *
+   * The two are kept apart because `criticalConflict` treats them differently:
+   * a low-confidence CONTRADICTED is still a model saying "no" and should
+   * withhold settlement, while a degraded one is only lexical overlap and must
+   * not.
+   */
+  degraded: boolean;
 }
 
 const ABSTENTION: Verdict = "INSUFFICIENT_EVIDENCE";
@@ -161,8 +171,15 @@ function consensusForVotes(
   // A decisive verdict too weak to count toward agreement is still strong
   // enough to withhold settlement: an open split on direction is exactly the
   // case the dispute path exists for, so it is measured over every reveal.
-  const supported = ordered.filter((vote) => vote.verdict === "SUPPORTED").length;
-  const contradicted = ordered.filter((vote) => vote.verdict === "CONTRADICTED").length;
+  //
+  // Degraded votes are the one exclusion. The rule above is about a model that
+  // answered weakly; a degraded verdict is lexical overlap standing in for a
+  // model that never answered. Letting it force a conflict would hand the
+  // outcome back to the offline scorer through the withholding door — and cost
+  // the creator half the bounty for a transient router failure.
+  const opinions = ordered.filter((vote) => !vote.degraded);
+  const supported = opinions.filter((vote) => vote.verdict === "SUPPORTED").length;
+  const contradicted = opinions.filter((vote) => vote.verdict === "CONTRADICTED").length;
   const criticalConflict = supported > 0 && contradicted > 0;
 
   const enoughAgreement = agreeingVerifiers.length >= rule.requiredAgreement;
@@ -255,7 +272,24 @@ function voteFor(
     verdict: entry.verdict,
     confidence: entry.confidence,
     snapshots: uniqueSorted(entry.sources.map((source) => source.contentHash.toLowerCase())),
-    counts: clearsFloor(entry.verdict, entry.confidence, rule),
+    // A verdict the verifier's model never produced does not count.
+    //
+    // `degraded` marks a claim scored by the offline lexical fallback because
+    // the compute call failed. Such a verdict is still listed in `verdicts`, so
+    // the failure stays auditable — it simply carries no weight, which through
+    // `agreeingVerifiers` also removes it from `rewardedVerifiers`. One flag
+    // closes both: a verifier is not paid for work its model did not do.
+    //
+    // Task 0xa11e3223… (2026-09-05) is why. Two verifiers lost their model on
+    // one claim, both fell back, both returned the same wrong SUPPORTED, and
+    // the two-two split settled the task CONFLICT — at which point the contract
+    // paid all four, including the one that spent nothing on inference.
+    //
+    // The cost of this is real and intended: enough degraded reports and a task
+    // drops below `requiredAgreement` and refunds as NO_QUORUM. A refund is a
+    // better answer than a consensus assembled from word overlap.
+    degraded: entry.degraded === true,
+    counts: entry.degraded !== true && clearsFloor(entry.verdict, entry.confidence, rule),
   };
 }
 
