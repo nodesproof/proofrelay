@@ -14,6 +14,50 @@ ProofRelay does not claim to know the truth. It makes the basis of an answer
 inspectable: which bytes were read, when they were read, which model read them,
 what each verifier concluded, and where they disagreed.
 
+## About
+
+**The problem.** A model asserts something and cites a page. By the time anyone
+checks, the page has changed, the model is a version behind, and the only record
+is a screenshot. Every part of the answer that mattered — which bytes were read,
+when, by what — is gone.
+
+**What this does.** A creator posts a question, a set of claims, and public
+source URLs, with a bounty. The API fetches each source once, hashes it, and
+stores the snapshot on 0G Storage. Independent verifier operators — separate
+machines, separate keys, separate models — each read the same snapshotted spans,
+publish a signed report, and commit its hash onchain before revealing it, so no
+verifier can see another's answer first. A consensus engine aggregates the
+revealed reports; the contract pays on agreement and withholds on conflict.
+
+**What comes out.** Not a score. A per-claim verdict —
+`SUPPORTED`, `CONTRADICTED` or `INSUFFICIENT_EVIDENCE` — with the exact sentence
+each verifier relied on, addressed by byte offset into a snapshot you can fetch
+and hash yourself, plus every dissenting verdict, published rather than averaged
+away. Anyone holding the task id can re-derive the result hash from the reports
+without asking the operator for anything.
+
+**What it deliberately does not claim.**
+
+- *Agreement is not truth.* Verifiers that share a retriever and a candidate span
+  set agree more easily than independent ones. The task page publishes what an
+  agreement is made of — distinct models, providers, sources — beside the number,
+  so the figure can be discounted rather than taken at face value.
+- *A verdict is an entailment judgement about retrieved text*, not a finding of
+  fact. Nothing here measures whether the retrieved text was the part that
+  mattered.
+- *A language model wrote it.* No person reviews a verdict. Models fail closed —
+  a fabricated citation is not expressible, and a verifier whose model did not
+  answer earns nothing — but a model can still be confidently wrong about text it
+  was shown. See [How a verdict is produced](docs/VERIFICATION.md#how-a-verdict-is-produced).
+- *Nothing is staked yet.* `verifierSlashBps` and `minVerifierStake` are zero on
+  the live deployment. Today the cost of a wrong report is forgone revenue, not a
+  loss. Agreement is a coordination result, not a cryptoeconomic guarantee.
+
+**Who it is for.** Anyone who needs the basis of an AI answer to survive the
+answer: teams publishing model output they will be held to, operators who want to
+sell verification as a service, and readers who would rather check a claim than
+be told it was checked.
+
 ## Live deployment
 
 | | |
@@ -22,7 +66,7 @@ what each verifier concluded, and where they disagreed.
 | Chain | 0G mainnet, chain ID **16661** |
 | Deploy block | `43394193` — the indexer starts here, not at genesis |
 | Storage | 0G Storage via `indexer-storage-turbo.0g.ai` |
-| Compute | 0G Compute Router, `deepseek-v4-flash`, TEE attested per request |
+| Compute | 0G Compute Router, TEE attested per request — five verifiers running four models (`deepseek-v4-flash`, `glm-5.3-flash`, `qwen3.8-flash`, `qwen3-vl-30b`) |
 | App | <https://proofrelay.nectiq.xyz> |
 | API | <https://api-proofrelay.nectiq.xyz/health> |
 
