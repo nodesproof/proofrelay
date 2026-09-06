@@ -14,7 +14,7 @@ import VerifierAvatar from "@/components/VerifierAvatar";
 import { EmptyState, EmptyStateBlock, ErrorState, EvidenceRowsSkeleton, SignalRowsSkeleton, Skeleton, StatCardsSkeleton, TimelineSkeleton, errorCode, errorMessage, writeErrorMessage } from "@/components/states";
 import { useAllocation, useClaimReward, useHealth, useOpenChallenge, usePaused, usePendingWithdrawal, useProtocolParams, useReport, useTask, useWallet, useWithdraw, queryKeys } from "@/hooks/useProofRelay";
 import { isApiError, syncTask } from "@/lib/api";
-import type { Bytes32, ClaimView, EvidenceSpan, ReportView, Tone, Verdict } from "@/lib/types";
+import type { Bytes32, ClaimView, EvidenceSpan, ReportView, TaskDetail as TaskDetailView, Tone, Verdict } from "@/lib/types";
 import { dayBucket, formatToken, relativeTime, sameAddress, shortAddress, shortHash, toChecksumAddress, utcClock } from "@/lib/format";
 import { EXPLORER_URL } from "@/lib/wagmi";
 
@@ -23,6 +23,32 @@ import { EXPLORER_URL } from "@/lib/wagmi";
 /** FRONTEND_DATA_CONTRACT §6.2 — CONTRADICTED is coral; it must never render lime. */
 const VERDICT_TONE: Record<Verdict, Tone> = { SUPPORTED: "lime", CONTRADICTED: "coral", INSUFFICIENT_EVIDENCE: "sky" };
 const VERDICT_LABEL: Record<Verdict, string> = { SUPPORTED: "SUPPORTED", CONTRADICTED: "CONTRADICTED", INSUFFICIENT_EVIDENCE: "INSUFFICIENT" };
+/**
+ * What the agreement is actually made of.
+ *
+ * "5/5 agree · 100%" reads as five independent checks, and on mainnet task
+ * 0x88218974… it was five models handed the byte-identical span set at
+ * temperature 0, two of them running the same model, all served by one
+ * provider, against one source. None of that was hidden — `modelId`,
+ * `computeProvider` and the source list are all in this payload — it was simply
+ * never added up beside the number it qualifies.
+ *
+ * Operator identity is deliberately absent: the API does not carry it, and
+ * inferring it from addresses would be a worse answer than not showing it.
+ */
+function composition(task: TaskDetailView): { revealed: number; models: number; providers: number; sources: number } {
+  const revealed = task.reports.filter((report) => report.revealed);
+  const distinct = (values: (string | null)[]) => new Set(values.filter((value): value is string => Boolean(value))).size;
+  return {
+    revealed: revealed.length,
+    models: distinct(revealed.map((report) => report.modelId)),
+    providers: distinct(revealed.map((report) => report.computeProvider)),
+    sources: task.sources.length,
+  };
+}
+
+const count = (n: number, noun: string): string => `${n} ${noun}${n === 1 ? "" : "s"}`;
+
 const CLAIM_TONE: Record<ClaimView["displayVerdict"], Tone> = { SUPPORTED: "lime", CONTRADICTED: "coral", INSUFFICIENT: "sky", PENDING: "ink" };
 
 /** The API's own event labels (task-service EVENT_LABELS) → the timeline's node tone and category. */
@@ -245,12 +271,25 @@ export default function TaskDetail() {
       </div>
     </section>
 
-    <section className="task-summary-grid">{!task ? <StatCardsSkeleton cards={3} className="summary-strip" /> : <><div className="summary-strip"><span className="summary-label">BOUNTY ESCROWED</span><strong>{task.bountyFormatted}</strong><span>{task.verifierCount} verifiers · creator {shortAddress(toChecksumAddress(task.creator) ?? task.creator)}</span></div><div className="summary-strip sky-summary"><span className="summary-label">AGREEMENT</span><strong>{task.agreementLabel}</strong><span>{task.committedCount}/{task.verifierCount} committed · {task.revealedCount}/{task.verifierCount} revealed</span></div><div className={`summary-strip ${disputeLive || conflicted.length > 0 ? "coral-summary" : "sky-summary"}`}><span className="summary-label">{disputeLive ? "DISPUTE" : "DISPUTE WINDOW"}</span><strong>{disputeLive ? untilLabel(dispute?.deadline, now) ?? "open" : untilLabel(task.disputeDeadline, now) ?? "—"}</strong><span>{disputeLive ? `challenged by ${shortAddress(dispute?.challenger)}` : conflicted.length > 0 ? `${conflicted.length} of ${claims.length} claims contested` : "no challenge opened"}</span></div></>}</section>
+    <section className="task-summary-grid">{!task ? <StatCardsSkeleton cards={3} className="summary-strip" /> : <><div className="summary-strip"><span className="summary-label">BOUNTY ESCROWED</span><strong>{task.bountyFormatted}</strong><span>{task.verifierCount} verifiers · creator {shortAddress(toChecksumAddress(task.creator) ?? task.creator)}</span></div><div className="summary-strip sky-summary"><span className="summary-label">AGREEMENT</span><strong>{task.agreementLabel}</strong>{(() => { const made = composition(task); return made.revealed === 0 ? <span>{task.committedCount}/{task.verifierCount} committed · {task.revealedCount}/{task.verifierCount} revealed</span> : <span title="Agreement between verifiers that share a retriever and a candidate span set counts for less than agreement between independent ones. These are the parts this API can see; it does not carry operator identity.">{count(made.models, "model")} · {count(made.providers, "provider")} · {count(made.sources, "source")}</span>; })()}</div><div className={`summary-strip ${disputeLive || conflicted.length > 0 ? "coral-summary" : "sky-summary"}`}><span className="summary-label">{disputeLive ? "DISPUTE" : "DISPUTE WINDOW"}</span><strong>{disputeLive ? untilLabel(dispute?.deadline, now) ?? "open" : untilLabel(task.disputeDeadline, now) ?? "—"}</strong><span>{disputeLive ? `challenged by ${shortAddress(dispute?.challenger)}` : conflicted.length > 0 ? `${conflicted.length} of ${claims.length} claims contested` : "no challenge opened"}</span></div></>}</section>
 
     <div className="lower-grid">
       <div className="evidence-section">
         <section className="section-block" id="evidence">
           <div className="section-header"><div><div className="eyebrow">CLAIMS · {task ? claims.length : "—"} <Origin kind="storage" /></div><h2>Evidence and disagreement</h2></div><span className="small-status">{conflicted.length > 0 ? <><span className="live-dot dot-coral" />{conflicted.length} of {claims.length} claims contested</> : task ? <><span className="live-dot" />no verifier disagreement</> : null}</span></div>
+          {/*
+            * Said once, above the verdicts, because everything else on this page
+            * is calibrated to make a reader trust them more: hashes, byte
+            * offsets, chain links, a coloured pill and a percentage. Nothing in
+            * the frontend said what wrote them. `modelId` sits in the
+            * commit-and-reveal table below the fold, where it reads as
+            * infrastructure metadata rather than as authorship.
+            */}
+          <p className="section-disclosure">
+            Verdicts below were produced by language models reading the quoted spans. No person reviewed them, and
+            a model can be confidently wrong about text it was shown.{" "}
+            <a href="https://github.com/nodesproof/proofrelay/blob/main/docs/VERIFICATION.md" target="_blank" rel="noopener noreferrer">How a verdict is produced</a>
+          </p>
           <div className="evidence-list">{!task ? <EvidenceRowsSkeleton rows={3} /> : claims.length === 0 ? <EmptyState icon="inbox">No claim has been read from the manifest yet.</EmptyState> : claims.map((claim) => { const spread = verdictSpread(claim); const conflict = isConflicted(claim); const tone = conflict ? "coral" : CLAIM_TONE[claim.displayVerdict]; return <div className={`evidence-item ${openClaim === claim.claimId ? "expanded" : ""} ${conflict ? "conflict" : ""}`} key={claim.claimId}><button className="evidence-head" onClick={() => setExpanded(openClaim === claim.claimId ? "" : claim.claimId)}><div className={`evidence-number number-${tone === "coral" ? "coral" : tone === "sky" ? "sky" : tone === "ink" ? "ink" : "lime"}`}>{claim.ordinal}</div><div className="evidence-title" title={claim.claimText}><strong>{claim.claimText}</strong><span><FileText size={12} />{claim.primarySourceLabel ?? "no source quoted yet"}</span></div><Pill tone={tone}>{conflict ? "CONFLICT" : claim.displayVerdict}</Pill><span className="confidence" title={conflict ? "verifiers agreeing on the leading verdict, out of those that reported" : "mean confidence of the agreeing verifiers"}>{conflict ? `${spread.majority}/${spread.total}` : claim.confidencePct === null ? "—" : `${claim.confidencePct}%`}</span><ChevronDown size={16} className="evidence-chevron" /></button>{openClaim === claim.claimId && <div className="evidence-detail">{claim.verdicts.length === 0 ? <EmptyState icon="inbox">No verifier has revealed a report for this claim yet.</EmptyState> : <><div className="evidence-meta"><span><ShieldCheck size={12} />{conflict ? "verifiers disagree — every verdict is shown" : `${spread.majority}/${spread.total} verifiers agree`}</span>{claim.evidenceCoverage !== null && <span><FileText size={12} />evidence coverage {Math.round(claim.evidenceCoverage * 100)}%</span>}{claim.retrievedAt && <span><Clock3 size={12} />retrieved {utcClock(claim.retrievedAt)} UTC</span>}</div><div className="verdict-strip">{claim.verdicts.map((verdict) => <div className="verdict-line" key={`${claim.claimId}:${verdict.verifier}`}><span className="verdict-who"><strong>{verdict.verifierLabel}</strong><span>{shortAddress(toChecksumAddress(verdict.verifier) ?? verdict.verifier)}</span></span><Pill tone={VERDICT_TONE[verdict.verdict]}>{VERDICT_LABEL[verdict.verdict]}</Pill><span className="confidence">{Math.round(verdict.confidence * 100)}%</span></div>)}</div>{(() => { const why = reasonings(claim); return why.shared ? <p className="verdict-reasoning">{why.shared}</p> : why.perVerifier.map((verdict) => <p className="verdict-reasoning" key={`${claim.claimId}:${verdict.verifier}:why`}><strong>{verdict.verifierLabel}:</strong> {verdict.reasoningSummary}</p>); })()}{citedSpans(claim).map(({ span, citedBy }) => <div className="verdict-source" key={`${span.contentHash}:${span.snapshotObjectId}:${span.quotedSpan.slice(0, 40)}`}><div className="quote-mark">“</div><p>{span.quotedSpan}</p><div className="evidence-meta"><span><ShieldCheck size={12} />cited by {citedBy.join(", ")}</span><span><FileText size={12} />{hostOf(span.uri)}</span><span><Hash size={12} />{shortHash(span.contentHash)}</span><span className="storage-pointer"><Database size={12} />{shortHash(span.snapshotObjectId, 6, 6)}</span><span><Clock3 size={12} />{utcClock(span.retrievedAt)} UTC</span><button onClick={() => open(span.uri)}>Open source <ArrowUpRight size={12} /></button></div></div>)}</>}</div>}</div>; })}</div>
         </section>
 
