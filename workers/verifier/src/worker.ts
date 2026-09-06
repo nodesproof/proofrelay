@@ -330,6 +330,10 @@ export class VerifierWorker {
         taskId: work.taskId,
         modelId: report.verifier.modelId,
         provider: report.compute.map((trace) => trace.provider).join(", "),
+        // The reason the driver kept. Without it this line said a verifier had
+        // fallen back and left the operator to guess between a dead key, an
+        // unroutable model and a refused response — three unrelated fixes.
+        reason: report.compute.map((trace) => trace.degradedReason).filter(Boolean).join("; ") || null,
         degradedClaims,
         // Neither counts toward consensus nor earns a share, so this is lost
         // revenue as well as lost signal.

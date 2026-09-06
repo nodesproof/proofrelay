@@ -327,6 +327,7 @@ export class LlmComputeAdapter implements ComputeAdapter {
     let claims: ExtractedClaim[];
     let attempts = 1;
     let degraded = false;
+    let degradedReason: string | undefined;
     let router: RouterTrace = {};
 
     try {
@@ -356,8 +357,9 @@ export class LlmComputeAdapter implements ComputeAdapter {
           claimText: claimText.trim(),
         }));
       if (claims.length === 0) throw new Error("empty claims array");
-    } catch {
+    } catch (error) {
       degraded = true;
+      degradedReason = redactReason(error);
       claims = (await this.fallback.runClaimExtraction(input)).value;
     }
 
@@ -403,6 +405,7 @@ export class LlmComputeAdapter implements ComputeAdapter {
     let results: ClaimScoringResult[];
     let attempts = 1;
     let degraded = false;
+    let degradedReason: string | undefined;
     let router: RouterTrace = {};
 
     try {
@@ -509,8 +512,13 @@ export class LlmComputeAdapter implements ComputeAdapter {
           sources: cited,
         };
       });
-    } catch {
+    } catch (error) {
       degraded = true;
+      // Keep the reason. Swallowing it left an operator with `fallback:local`,
+      // three attempts and a minute of latency, and no way to tell a dead key
+      // from an unroutable model from a refusal — the three fixes are entirely
+      // different. Message only, capped, because this is published.
+      degradedReason = redactReason(error);
       attempts = this.options.maxAttempts;
       results = input.claims.map((claim) =>
         scoreClaim(claim, input.corpus, depth, threshold, "call-failed"),
@@ -536,7 +544,9 @@ export class LlmComputeAdapter implements ComputeAdapter {
         latencyMs: Date.now() - started,
         attempts,
         verified: router.tee_verified === true,
+        ...(degradedReason ? { degradedReason } : {}),
         attestation: router.attestation ?? null,
+        ...(degradedReason ? { degradedReason } : {}),
         rawArtifactPointer: null,
       },
     };
@@ -621,6 +631,24 @@ function parseJson<T>(text: string): T | null {
 }
 
 /** Best-scoring span per source, then the best `limit` overall. */
+/**
+ * An error message fit to publish: no stack, no query string, no credential.
+ *
+ * The reason goes into an artifact anchored onchain, so it must carry only what
+ * the operator would have chosen to disclose. `sk-` tokens and bearer values get
+ * masked because router errors sometimes echo the request back.
+ */
+function redactReason(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error);
+  return raw
+    .replace(/\bsk-[A-Za-z0-9._-]+/g, "sk-<redacted>")
+    .replace(/(bearer\s+)\S+/gi, "$1<redacted>")
+    .replace(/([?&](?:key|token|api[_-]?key)=)[^&\s]+/gi, "$1<redacted>")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 300);
+}
+
 function topSpans(
   claimText: string,
   corpus: EvidenceScoringInput["corpus"],

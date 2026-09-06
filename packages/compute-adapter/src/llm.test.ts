@@ -291,6 +291,44 @@ describe("LlmComputeAdapter output validation", () => {
   });
 });
 
+describe("LlmComputeAdapter degradedReason", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  /**
+   * The driver used to `catch {}` here, with no binding. An operator whose
+   * verifier fell back saw `fallback:local`, three attempts and a minute of
+   * latency, and nothing else — on mainnet task 0xe95f50b2… that was read as a
+   * misconfiguration when the configuration was correct.
+   */
+  it("keeps the reason a whole-report fallback happened", async () => {
+    vi.stubGlobal("fetch", async () => {
+      throw new Error("router 404: model hy4-preview is not routable");
+    });
+    const out = await new LlmComputeAdapter(OPTIONS).scoreEvidence(INPUT);
+    expect(out.trace.provider).toContain("fallback:local");
+    expect(out.trace.degradedReason).toContain("not routable");
+  });
+
+  /**
+   * The reason is published in an artifact anchored onchain, so a router that
+   * echoes the request back must not take the operator's key with it.
+   */
+  it("masks a credential the error echoed back", async () => {
+    vi.stubGlobal("fetch", async () => {
+      throw new Error("401 for Authorization: Bearer sk-d51def58-7fd3-4f00-9ea6-c40aa6d4d05e");
+    });
+    const out = await new LlmComputeAdapter(OPTIONS).scoreEvidence(INPUT);
+    expect(out.trace.degradedReason).not.toContain("sk-d51def58");
+    expect(out.trace.degradedReason).toContain("redacted");
+  });
+
+  it("leaves the field off a report that did not degrade", async () => {
+    routerReturning({ results: [{ claimId: "claim-001", verdict: "SUPPORTED", confidence: 0.8, spanIndexes: [0] }] });
+    const out = await new LlmComputeAdapter(OPTIONS).scoreEvidence(INPUT);
+    expect(out.trace.degradedReason).toBeUndefined();
+  });
+});
+
 describe("salvageRows", () => {
   /**
    * All claims go out in one request and the model caps its completion at 2048

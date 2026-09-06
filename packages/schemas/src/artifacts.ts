@@ -197,6 +197,21 @@ export const ComputeTrace = z.object({
     })
     .nullable()
     .optional(),
+  /**
+   * Why this trace degraded to the offline scorer, when it did.
+   *
+   * The driver used to swallow the error that caused a full-report fallback
+   * (`catch {}`, no binding), so an operator saw only `fallback:local`, three
+   * attempts and sixty seconds burned — with nothing to act on. On mainnet task
+   * 0xe95f50b2… that cost a verifier its whole share while its configuration
+   * was, as its operator insisted, correct: the model was reachable and the key
+   * was valid, and the reason lived in an exception nobody kept.
+   *
+   * Truncated and message-only: it is published, so it must not carry a stack,
+   * a URL with a key in it, or anything else the operator did not choose to
+   * disclose. Optional, so reports written before this field still validate.
+   */
+  degradedReason: z.string().max(300).optional(),
   rawArtifactPointer: z.string().nullable(),
 });
 export type ComputeTrace = z.infer<typeof ComputeTrace>;
