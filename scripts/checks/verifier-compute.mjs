@@ -18,6 +18,10 @@
  *
  *   node scripts/checks/verifier-compute.mjs           # a, b, c, d
  *   node scripts/checks/verifier-compute.mjs c d       # just these
+ *   node scripts/checks/verifier-compute.mjs --list    # which profiles, no spend
+ *
+ * With no arguments it checks the profiles this machine actually has — a role
+ * file, a key variable, or VERIFIER_PROFILE — not a fixed a/b/c/d list.
  *
  * It spends a completion per profile, so run it after changing a key or a model
  * — not on a timer.
@@ -28,14 +32,82 @@
  * load first — and report the wrong key as healthy. The parent re-execs itself.
  */
 import { spawnSync } from "node:child_process";
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const self = fileURLToPath(import.meta.url);
-const requested = process.argv.slice(2).filter((arg) => arg !== "--one");
+const root = resolve(dirname(self), "..", "..");
+const requested = process.argv.slice(2).filter((arg) => arg !== "--one" && arg !== "--list");
 const one = process.argv.includes("--one");
+// Discovery is the part that goes wrong quietly, and confirming it must not
+// cost a completion. --list answers "which verifiers do you think I have".
+const listOnly = process.argv.includes("--list");
+
+/**
+ * The profiles this machine can actually run, found rather than assumed.
+ *
+ * This used to be the literal list ["a","b","c","d"], which is this repo's own
+ * development set-up and nobody else's. A standalone operator running
+ * VERIFIER_PROFILE=nodesproof got four SKIP lines about keys they had never
+ * heard of and no line about the verifier they were actually running — the one
+ * check built to explain a fallback, silent about the only profile present.
+ *
+ * A name is a candidate if a role file names it, if a key variable for it is
+ * set, or if it is the profile this shell already selected. Read from the files
+ * directly: loadEnv() memoises against one profile, and this runs before any
+ * profile has been chosen.
+ */
+function discoverProfiles() {
+  const names = new Set();
+  const ambient = process.env.VERIFIER_PROFILE?.trim();
+  if (ambient) names.add(ambient.toLowerCase());
+
+  let entries = [];
+  try {
+    entries = readdirSync(root);
+  } catch {
+    entries = [];
+  }
+  for (const entry of entries) {
+    const match = /^\.env\.verifier-(.+)$/.exec(entry);
+    if (match && !entry.endsWith(".example")) names.add(match[1].toLowerCase());
+  }
+
+  const keyPattern = /^\s*VERIFIER_([A-Z0-9_]+)_PRIVATE_KEY\s*=\s*(.*)$/gm;
+  const sources = [...entries.filter((e) => /^\.env(\..+)?$/.test(e) && !e.endsWith(".example"))];
+  for (const file of sources) {
+    let text = "";
+    try {
+      text = readFileSync(join(root, file), "utf8");
+    } catch {
+      continue;
+    }
+    for (const [, key, value] of text.matchAll(keyPattern)) {
+      if (value.trim()) names.add(key.toLowerCase());
+    }
+  }
+  for (const key of Object.keys(process.env)) {
+    const match = /^VERIFIER_([A-Z0-9_]+)_PRIVATE_KEY$/.exec(key);
+    if (match && process.env[key]?.trim()) names.add(match[1].toLowerCase());
+  }
+  return [...names].sort();
+}
 
 if (!one) {
-  const profiles = requested.length ? requested : ["a", "b", "c", "d"];
+  const found = requested.length ? requested : discoverProfiles();
+  if (found.length === 0) {
+    console.log(
+      "no verifier profile found. Set VERIFIER_PROFILE and the matching " +
+        "VERIFIER_<NAME>_PRIVATE_KEY in .env, or name one: check:compute <profile>",
+    );
+    process.exit(1);
+  }
+  if (listOnly) {
+    console.log(found.join("\n"));
+    process.exit(0);
+  }
+  const profiles = found;
   let failed = 0;
   for (const profile of profiles) {
     const result = spawnSync(process.execPath, [self, "--one", profile], {
@@ -55,7 +127,7 @@ let profile;
 try {
   profile = verifierProfile(name);
 } catch (error) {
-  console.log(`verifier-${name.padEnd(4)} SKIP      ${String(error.message)}`);
+  console.log(`${`verifier-${name}`.padEnd(12)}SKIP      ${String(error.message)}`);
   process.exit(0);
 }
 
