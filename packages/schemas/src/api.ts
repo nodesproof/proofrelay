@@ -176,6 +176,24 @@ export const ReportView = z.object({
   insufficient: z.number().int().nullable(),
   meanConfidence: z.number().nullable(),
   computeProvider: z.string().nullable(),
+  /**
+   * Whether the router affirmed, for THIS completion, that the provider's TEE
+   * attestation verified. Strictly per-response, and false when the deployment
+   * did not ask: a verifier running with COMPUTE_VERIFY_TEE off gets no
+   * attestation rather than a false one.
+   *
+   * Not to be confused with the `verified` on `/v1/artifacts/{hash}`, which is
+   * a content-hash comparison and says nothing about where anything ran.
+   */
+  teeVerified: z.boolean().nullable(),
+  /**
+   * What the router's provider directory says about the machine that served the
+   * request — TDX, dstack, TeeTLS. A claim ABOUT A PROVIDER, not a proof about
+   * this response: the directory exposes no quote and no measurement, so
+   * nothing here can be checked against an attestation service. Attribution,
+   * not verification, and the UI must not present it as the latter.
+   */
+  teeType: z.string().nullable(),
   computeLatencyMs: z.number().int().nullable(),
   commitTx: TxRef,
   revealTx: TxRef,

@@ -176,6 +176,10 @@ export interface ReportView {
   insufficient: number | null;
   meanConfidence: number | null;
   computeProvider: string | null;
+  /** The router affirmed a TEE attestation for THIS completion. Not a hash check. */
+  teeVerified: boolean | null;
+  /** What the provider directory says ran it — TDX. Attribution, not proof. */
+  teeType: string | null;
   computeLatencyMs: number | null;
   commitTx: TxRef;
   revealTx: TxRef;

@@ -1276,6 +1276,11 @@ async function buildReports(
       insufficient: row?.insufficient ?? body?.summary.insufficient ?? null,
       meanConfidence: row?.mean_confidence ?? body?.summary.meanConfidence ?? null,
       computeProvider: row?.compute_provider ?? body?.compute[0]?.provider ?? null,
+      // Read from the artifact only. There is no indexer column for either, and
+      // inventing a default would be asserting something about where a
+      // computation ran on the strength of nothing.
+      teeVerified: body?.compute[0]?.verified ?? null,
+      teeType: body?.compute[0]?.attestation?.teeType ?? null,
       computeLatencyMs: row?.compute_latency_ms ?? body?.compute[0]?.latencyMs ?? null,
       commitTx: txRef(args.chainId, commitTx, args.blockByTx.get((commitTx ?? "").toLowerCase()) ?? null),
       revealTx: txRef(args.chainId, revealTx, args.blockByTx.get((revealTx ?? "").toLowerCase()) ?? null),

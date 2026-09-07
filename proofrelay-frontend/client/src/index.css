@@ -425,6 +425,9 @@ button.signal-row:disabled { opacity: .72; }
 .section-disclosure a { color: #3c4c44; text-decoration: underline; text-underline-offset: 2px; }
 .disclosure-by { display: block; margin-top: 6px; padding-top: 6px; border-top: 1px solid #edefea; }
 .disclosure-by strong { color: #3c4c44; font-weight: 700; }
+/* Attribution, not a badge: no tick, no colour that reads as a guarantee. */
+.tee-note { color: #6b7a72; }
+.tee-note.tee-none { color: #a8877c; }
 .side-note strong { color: #3c4c44; font-weight: 700; }
 .side-list { padding-bottom: 6px; }
 .side-card .empty-state { padding: 19px 17px 23px; font-size: 13px; }
