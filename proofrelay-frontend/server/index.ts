@@ -5,6 +5,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 import { cardFromTask, claimReviewLd, defaultCardSvg, injectHead, siteMeta, taskCardSvg, taskMeta } from "./og.js";
+import { looksLikeAsset } from "./routing.js";
 import { available, cached, remember, renderPng } from "./og-render.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -244,7 +245,15 @@ async function startServer() {
   app.use(express.static(staticPath, { index: false }));
 
   // wouter does the routing; every unknown path is a page, not a 404.
+  //
+  // Except a request for a file. `express.static` has already declined by here,
+  // so an asset-shaped path that reaches this handler is genuinely missing —
+  // and answering it with the shell hands the browser HTML under a `.js` URL,
+  // at status 200. That is how a client rebuild blanks a running server: vite
+  // renames every output by content hash, the cached shell still points at the
+  // old names, and nothing anywhere reports an error. 404 says it instead.
   app.get("*", async (req, res) => {
+    if (looksLikeAsset(req.path)) return res.status(404).end();
     const origin = originOf(req);
     if (!origin) return res.type("html").send(readShell());
     return res.type("html").send(injectHead(readShell(), siteMeta(origin, req.path, await available())));
